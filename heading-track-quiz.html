@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Heading &amp; Track (TVMDC) | Navigation Quiz</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <style>
+    .parameters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav aria-label="Quiz navigation"><a href="index.html">All quizzes</a></nav>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>Heading &amp; Track (TVMDC)</h1>
+      <p class="muted">Test your heading and track conversions with pencil and paper.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your navigation conditions</h2>
+        <dl class="parameters">
+          <div><dt id="bearing-label"></dt><dd id="bearing-value"></dd></div>
+          <div id="drift-parameter"><dt>Drift</dt><dd id="drift-value"></dd></div>
+          <div><dt>Deviation</dt><dd id="deviation-value"></dd></div>
+          <div><dt>Variation</dt><dd id="variation-value"></dd></div>
+        </dl>
+        <p id="question-text"></p>
+        <p class="muted">E means East and W means West. A + sign means East; a - sign means West.</p>
+        <p id="drift-note" class="muted">Drift is the displacement of track to the left or right of the aircraft's heading.</p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">Your answer</h2>
+        <form id="quiz-form">
+          <label id="answer-label" for="bearing">True track</label>
+          <div class="input-row">
+            <input id="bearing" name="bearing" type="number" min="0" max="360" step="1" required inputmode="numeric" autocomplete="off" aria-describedby="answer-note">
+            <span id="answer-unit" class="unit">&deg;T</span>
+          </div>
+          <p id="answer-note" class="muted tolerance">Give the exact answer in whole degrees. 360&deg; and 000&deg; are equivalent.</p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      </section>
+    </div>
+    <footer>Random exercises: bearings 000&ndash;359&deg;, drift up to 15&deg; left/right, variation up to 15&deg; E/W, deviation up to 5&deg; E/W. Simplified practice only; not for operational navigation.</footer>
+  </main>
+  <script src="assets/bearings.js"></script>
+  <script>
+    "use strict";
+
+    const CONVERSIONS = Object.freeze({
+      toTrack: {
+        sourceLabel: "Compass heading", sourceUnit: "C", fromCompass: true,
+        targetLabel: "True track", targetUnit: "T", targetKey: "trueTrack", hasDrift: true
+      },
+      toCompass: {
+        sourceLabel: "Required true track", sourceUnit: "T", fromCompass: false,
+        targetLabel: "Compass heading", targetUnit: "C", targetKey: "compassHeading", hasDrift: true
+      },
+      toTrueHeading: {
+        sourceLabel: "Compass heading", sourceUnit: "C", fromCompass: true,
+        targetLabel: "True heading", targetUnit: "T", targetKey: "trueHeading", hasDrift: false
+      },
+      fromTrueHeading: {
+        sourceLabel: "Required true heading", sourceUnit: "T", fromCompass: false,
+        targetLabel: "Compass heading", targetUnit: "C", targetKey: "compassHeading", hasDrift: false
+      }
+    });
+
+    function solveHeadingTrack({ direction, bearing, drift, deviation, variation }) {
+      if (!Object.hasOwn(CONVERSIONS, direction)) {
+        throw new Error("Question must convert between compass heading and true heading or true track.");
+      }
+      const conversion = CONVERSIONS[direction];
+      const corrections = conversion.hasDrift ? [drift, deviation, variation] : [deviation, variation];
+      if (![bearing, ...corrections].every(Number.isFinite) ||
+          bearing < 0 || bearing > 360 || corrections.some(angle => Math.abs(angle) > 180)) {
+        throw new Error("Bearing must be 0 through 360 degrees; signed corrections must be finite and within 180 degrees.");
+      }
+      let trueTrack, trueHeading, magneticHeading, compassHeading;
+      if (conversion.fromCompass) {
+        compassHeading = normalize(bearing);
+        magneticHeading = normalize(compassHeading + deviation);
+        trueHeading = normalize(magneticHeading + variation);
+        if (conversion.hasDrift) trueTrack = normalize(trueHeading + drift);
+      } else {
+        if (conversion.hasDrift) {
+          trueTrack = normalize(bearing);
+          trueHeading = normalize(trueTrack - drift);
+        } else {
+          trueHeading = normalize(bearing);
+        }
+        magneticHeading = normalize(trueHeading - variation);
+        compassHeading = normalize(magneticHeading - deviation);
+      }
+      const solution = { trueHeading, magneticHeading, compassHeading };
+      if (conversion.hasDrift) solution.trueTrack = trueTrack;
+      return { ...solution, answer: solution[conversion.targetKey] };
+    }
+
+    function gradeBearing(answer, solution) {
+      if (![answer, solution].every(Number.isFinite) || answer < 0 || answer > 360 || solution < 0 || solution > 360) {
+        throw new Error("Answer and solution must be finite bearings from 0 through 360 degrees.");
+      }
+      const error = Math.abs(signedAngle(answer - solution));
+      return { error, passed: error <= 1e-9 };
+    }
+
+    function formatCorrection(angle, notation) {
+      if (!Number.isFinite(angle) || (notation !== "signs" && notation !== "letters")) {
+        throw new Error("Correction must be finite and notation must be signs or letters.");
+      }
+      if (angle === 0) return "0\u00b0";
+      return notation === "signs"
+        ? `${angle > 0 ? "+" : "-"}${Math.abs(angle)}\u00b0`
+        : `${Math.abs(angle)}\u00b0 ${angle > 0 ? "E" : "W"}`;
+    }
+
+    function formatDrift(drift) {
+      return drift === 0 ? "No drift" : `${Math.abs(drift)}\u00b0 ${drift < 0 ? "left" : "right"} drift`;
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const directions = Object.keys(CONVERSIONS);
+      const direction = directions[randomInt(0, directions.length - 1)];
+      const question = {
+        direction, bearing: randomInt(0, 359),
+        deviation: randomInt(-5, 5), variation: randomInt(-15, 15),
+        notation: Math.random() < 0.5 ? "signs" : "letters"
+      };
+      if (CONVERSIONS[direction].hasDrift) question.drift = randomInt(-15, 15);
+      return question;
+    }
+
+    const byId = id => document.getElementById(id);
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    const answer = byId("bearing");
+    let question;
+    let solution;
+
+    function clearFeedback() {
+      feedback.hidden = true;
+      feedback.className = "";
+      feedback.replaceChildren();
+    }
+
+    function setQuestion(next) {
+      const nextSolution = solveHeadingTrack(next);
+      const deviation = formatCorrection(next.deviation, next.notation);
+      const variation = formatCorrection(next.variation, next.notation);
+      question = next;
+      solution = nextSolution;
+      form.reset();
+      clearFeedback();
+      const conversion = CONVERSIONS[question.direction];
+      byId("bearing-label").textContent = conversion.sourceLabel;
+      byId("bearing-value").textContent = `${formatBearing(question.bearing)} ${conversion.sourceUnit}`;
+      byId("drift-parameter").hidden = !conversion.hasDrift;
+      byId("drift-note").hidden = !conversion.hasDrift;
+      byId("drift-value").textContent = conversion.hasDrift ? formatDrift(question.drift) : "";
+      byId("deviation-value").textContent = deviation;
+      byId("variation-value").textContent = variation;
+      const conditions = `${conversion.hasDrift ? formatDrift(question.drift).toLowerCase() + ", " : ""}deviation ${deviation}, and variation ${variation}`;
+      byId("question-text").textContent = conversion.fromCompass
+        ? `Aircraft is on a compass heading of ${formatBearing(question.bearing)} with ${conditions}. What is the ${conversion.targetLabel.toLowerCase()}?`
+        : `Aircraft must ${conversion.hasDrift ? "maintain a true track" : "fly a true heading"} of ${formatBearing(question.bearing)} with ${conditions}. What compass heading should it fly?`;
+      byId("answer-label").textContent = conversion.targetLabel;
+      byId("answer-unit").textContent = `\u00b0${conversion.targetUnit}`;
+    }
+
+    function calculationStep(label, start, correction, result) {
+      return `${label}: ${formatBearing(start)} ${correction < 0 ? "-" : "+"} ${Math.abs(correction)}\u00b0 = ${formatBearing(result)}.`;
+    }
+
+    form.addEventListener("input", clearFeedback);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const result = gradeBearing(answer.valueAsNumber, solution.answer);
+      feedback.hidden = false;
+      feedback.className = result.passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = result.passed ? "Correct." : "Incorrect. Compare your calculation below.";
+      feedback.appendChild(title);
+      const conversion = CONVERSIONS[question.direction];
+      const texts = [`${conversion.targetLabel}: ${formatBearing(solution.answer)} ${conversion.targetUnit}.`];
+      if (conversion.fromCompass) {
+        texts.push(
+          calculationStep("Magnetic heading (deviation)", solution.compassHeading, question.deviation, solution.magneticHeading),
+          calculationStep("True heading (variation)", solution.magneticHeading, question.variation, solution.trueHeading)
+        );
+        if (conversion.hasDrift) {
+          texts.push(calculationStep("True track (drift last)", solution.trueHeading, question.drift, solution.trueTrack));
+        }
+      } else {
+        if (conversion.hasDrift) {
+          texts.push(calculationStep("True heading (remove drift first)", solution.trueTrack, -question.drift, solution.trueHeading));
+        }
+        texts.push(
+          calculationStep("Magnetic heading (variation)", solution.trueHeading, -question.variation, solution.magneticHeading),
+          calculationStep("Compass heading (deviation)", solution.magneticHeading, -question.deviation, solution.compassHeading)
+        );
+      }
+      texts.push("In TVMDC, T stands for True Heading: True Heading -> Variation -> Magnetic Heading -> Deviation -> Compass Heading.");
+      if (conversion.hasDrift) texts.push("Drift is the additional conversion between true heading and true track.");
+      for (const text of texts) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      setQuestion(generateQuestion());
+      answer.focus();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({ direction: "toTrack", bearing: 285, drift: -8, deviation: 2, variation: -5, notation: "letters" });
+      answer.focus();
+    });
+    setQuestion(generateQuestion());
+  </script>
+</body>
+</html>

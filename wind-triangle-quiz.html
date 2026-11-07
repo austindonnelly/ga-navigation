@@ -75,20 +75,13 @@
     </div>
     <footer>Random exercises: wind 0&ndash;30 kt, TAS 70&ndash;160 kt, bearings 000&ndash;359&deg;. Simplified steady-wind practice only; not for operational navigation.</footer>
   </main>
+  <script src="assets/bearings.js"></script>
   <script>
     "use strict";
 
     const DEG = Math.PI / 180;
     const HEADING_TOLERANCE = 2;
     const GS_TOLERANCE = 3;
-
-    function normalize(angle) {
-      return ((angle % 360) + 360) % 360;
-    }
-
-    function signedAngle(angle) {
-      return normalize(angle + 180) - 180;
-    }
 
     function solveWindTriangle({ windFrom, windSpeed, track, tas }) {
       if (![windFrom, windSpeed, track, tas].every(Number.isFinite) || windSpeed < 0 || tas <= 0) {
@@ -121,11 +114,6 @@
         headingOK: Math.abs(signedAngle(heading - solution.heading)) <= HEADING_TOLERANCE + 1e-9,
         gsOK: Math.abs(gs - solution.gs) <= GS_TOLERANCE + 1e-9
       };
-    }
-
-    function formatBearing(angle, decimals = 0) {
-      const rounded = normalize(Number(normalize(angle).toFixed(decimals)));
-      return rounded.toFixed(decimals).padStart(decimals ? 4 + decimals : 3, "0") + "\u00b0";
     }
 
     const byId = id => document.getElementById(id);
