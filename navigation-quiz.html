@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Wind Triangle | Navigation Quiz</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #0c1424; color: #e8eef8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 36px 20px; }
+    main { max-width: 1080px; margin: auto; }
+    header { margin-bottom: 24px; }
+    .eyebrow { color: #76d8c3; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { font-size: clamp(1.8rem, 4vw, 2.7rem); margin: 8px 0; letter-spacing: -.04em; }
+    p { line-height: 1.6; }
+    .muted { color: #afbed2; }
+    .layout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; align-items: start; }
+    .panel { background: #141f33; border: 1px solid #2c3b54; border-radius: 18px; padding: 24px; }
+    h2 { margin: 0 0 18px; font-size: 1.1rem; }
+    .parameters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 20px; }
+    .parameters div { padding: 13px 10px; background: #0e182a; border-radius: 10px; }
+    dt { font-size: .75rem; color: #afbed2; margin-bottom: 7px; }
+    dd { margin: 0; font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    svg { width: 100%; height: auto; display: block; background: #0e182a; border-radius: 12px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 16px 0 0; font-size: .8rem; }
+    .wind { color: #f7bc71; } .track { color: #76d8c3; } .air { color: #a7b7ff; }
+    .diagram-note { font-size: .8rem; min-height: 2.6em; margin-bottom: 0; }
+    label { display: block; margin: 18px 0 7px; font-size: .9rem; font-weight: 600; }
+    .input-row { display: flex; align-items: center; gap: 12px; }
+    input { width: 100%; min-width: 0; padding: 13px; border: 1px solid #52637d; border-radius: 9px; background: #0c1424; color: #e8eef8; font: inherit; font-size: 1.15rem; }
+    input:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid #76d8c3; outline-offset: 3px; }
+    .unit { width: 30px; color: #afbed2; }
+    button { padding: 12px 17px; border-radius: 9px; border: 1px solid #52637d; background: transparent; color: #e8eef8; font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
+    button:hover { background: #253650; }
+    button.primary { background: #76d8c3; color: #0c1424; border-color: #76d8c3; }
+    button.primary:hover { background: #9be6d6; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+    .tolerance { font-size: .8rem; }
+    #feedback { margin-top: 20px; padding: 16px; border-radius: 10px; border: 1px solid #52637d; background: #0e182a; }
+    #feedback[hidden] { display: none; }
+    #feedback.success { border-color: #76d8c3; }
+    #feedback.retry { border-color: #f7bc71; }
+    #feedback p { margin: 6px 0; font-size: .9rem; }
+    .answer { font-variant-numeric: tabular-nums; }
+    details { margin-top: 20px; color: #afbed2; font-size: .85rem; }
+    summary { cursor: pointer; color: #e8eef8; }
+    code { color: #c4d0ff; overflow-wrap: anywhere; }
+    footer { margin-top: 20px; font-size: .78rem; color: #afbed2; }
+    @media (max-width: 760px) { body { padding: 22px 12px; } .layout { grid-template-columns: 1fr; } .panel { padding: 18px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>The wind triangle</h1>
+      <p class="muted">Set up your CRP-1. Find the heading to fly and your ground speed.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your flight conditions</h2>
+        <dl class="parameters">
+          <div><dt>Wind FROM</dt><dd id="wind-value"></dd></div>
+          <div><dt>Required track</dt><dd id="track-value"></dd></div>
+          <div><dt>True airspeed</dt><dd id="tas-value"></dd></div>
+        </dl>
+        <svg id="diagram" viewBox="0 0 520 520" role="img" aria-labelledby="diagram-title diagram-description">
+          <title id="diagram-title">Wind and required track</title>
+          <desc id="diagram-description">North-up vector diagram. Wind has three chevrons; required track has two.</desc>
+          <g id="plot"></g>
+        </svg>
+        <div class="legend" aria-label="Vector legend">
+          <span class="wind">Wind: 3 chevrons</span>
+          <span class="track">Track: 2 chevrons</span>
+          <span class="air">Heading: 1 chevron (after checking)</span>
+        </div>
+        <p id="diagram-note" class="muted diagram-note"></p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">What would you fly?</h2>
+        <p class="muted">All bearings are degrees true, clockwise from north. Wind direction is where the wind comes <strong>from</strong>; its vector points downwind.</p>
+        <form id="quiz-form">
+          <label for="heading">Required heading</label>
+          <div class="input-row">
+            <input id="heading" name="heading" type="number" min="0" max="360" step="any" placeholder="000" required inputmode="decimal" autocomplete="off">
+            <span class="unit">&deg;T</span>
+          </div>
+          <label for="ground-speed">Ground speed (GS)</label>
+          <div class="input-row">
+            <input id="ground-speed" name="groundSpeed" type="number" min="0.1" step="any" placeholder="0" required inputmode="decimal" autocomplete="off">
+            <span class="unit">kt</span>
+          </div>
+          <p class="muted tolerance">Mechanical-computer leeway: &plusmn;2&deg; heading and &plusmn;3 kt GS. 360&deg; and 000&deg; are equivalent.</p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+        <details>
+          <summary>How the answers are calculated</summary>
+          <p>Using x = east and y = north, convert the wind FROM bearing W into its velocity: <code>w = (-WS sin W, -WS cos W)</code>.</p>
+          <p>For required track T, the unit vectors along and right of track are <code>t = (sin T, cos T)</code> and <code>r = (cos T, -sin T)</code>. Project the wind onto these using dot products.</p>
+          <p><code>GS = sqrt(TAS&sup2; - (w &middot; r)&sup2;) + w &middot; t</code>. Then the aircraft's air velocity is <code>a = GS &times; t - w</code>. Its heading is <code>atan2(a.x, a.y)</code>, normalized to 000&ndash;359&deg;.</p>
+          <p>Drift is track minus heading, wrapped to &minus;180&deg; through +180&deg;: positive is right drift; negative is left drift. Wind correction is equal and opposite.</p>
+          <p>The reference uses wind FROM 030&deg; at 25 kt, TAS 90 kt, and RT 100&deg;. Exact results: heading 084.87&deg;, drift 15.13&deg; right, GS 78.33 kt. Mechanical readings of 084&deg; and 77 kt pass the stated tolerances.</p>
+        </details>
+      </section>
+    </div>
+    <footer>Random exercises: wind 0&ndash;30 kt, TAS 70&ndash;160 kt, bearings 000&ndash;359&deg;. Simplified steady-wind practice only; not for operational navigation.</footer>
+  </main>
+  <script>
+    "use strict";
+
+    const DEG = Math.PI / 180;
+    const HEADING_TOLERANCE = 2;
+    const GS_TOLERANCE = 3;
+
+    function normalize(angle) {
+      return ((angle % 360) + 360) % 360;
+    }
+
+    function signedAngle(angle) {
+      return normalize(angle + 180) - 180;
+    }
+
+    function solveWindTriangle({ windFrom, windSpeed, track, tas }) {
+      if (![windFrom, windSpeed, track, tas].every(Number.isFinite) || windSpeed < 0 || tas <= 0) {
+        throw new Error("Wind and track must be finite bearings, wind speed nonnegative, and TAS positive.");
+      }
+      const wind = {
+        x: -windSpeed * Math.sin(windFrom * DEG),
+        y: -windSpeed * Math.cos(windFrom * DEG)
+      };
+      const t = { x: Math.sin(track * DEG), y: Math.cos(track * DEG) };
+      const along = wind.x * t.x + wind.y * t.y;
+      const cross = wind.x * t.y - wind.y * t.x;
+      if (Math.abs(cross) > tas) {
+        throw new Error("This crosswind exceeds the aircraft's ability to maintain the required track.");
+      }
+      const gs = Math.sqrt(Math.max(0, tas * tas - cross * cross)) + along;
+      if (gs <= 0) {
+        throw new Error("This wind prevents forward progress along the required track.");
+      }
+      const ground = { x: gs * t.x, y: gs * t.y };
+      const air = { x: ground.x - wind.x, y: ground.y - wind.y };
+      const heading = normalize(Math.atan2(air.x, air.y) / DEG);
+      return { heading, gs, drift: signedAngle(track - heading), wind, ground, air };
+    }
+
+    function gradeAnswer(heading, gs, solution) {
+      return {
+        headingError: Math.abs(signedAngle(heading - solution.heading)),
+        gsError: Math.abs(gs - solution.gs),
+        headingOK: Math.abs(signedAngle(heading - solution.heading)) <= HEADING_TOLERANCE + 1e-9,
+        gsOK: Math.abs(gs - solution.gs) <= GS_TOLERANCE + 1e-9
+      };
+    }
+
+    function formatBearing(angle, decimals = 0) {
+      const rounded = normalize(Number(normalize(angle).toFixed(decimals)));
+      return rounded.toFixed(decimals).padStart(decimals ? 4 + decimals : 3, "0") + "\u00b0";
+    }
+
+    const byId = id => document.getElementById(id);
+    const plot = byId("plot");
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    let question;
+    let solution;
+
+    function svgElement(tag, attributes, text) {
+      const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value);
+      if (text !== undefined) element.textContent = text;
+      plot.appendChild(element);
+      return element;
+    }
+
+    function drawVector(start, end, color, chevrons, dashed = false) {
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const length = Math.hypot(dx, dy);
+      if (length < 0.001) return;
+      const ux = dx / length;
+      const uy = dy / length;
+      svgElement("line", {
+        x1: start.x, y1: start.y, x2: end.x, y2: end.y,
+        stroke: color, "stroke-width": 3, "stroke-dasharray": dashed ? "8 6" : "none"
+      });
+      // Keep all chevrons on short wind vectors without exaggerating wind speed.
+      const size = Math.min(10, length / (chevrons * 2 + 1));
+      for (let i = 0; i < chevrons; i++) {
+        const distance = length * 0.64 + (i - (chevrons - 1) / 2) * size * 1.5;
+        const x = start.x + ux * distance;
+        const y = start.y + uy * distance;
+        svgElement("polyline", {
+          points: `${x - ux * size - uy * size * .65},${y - uy * size + ux * size * .65} ${x},${y} ${x - ux * size + uy * size * .65},${y - uy * size - ux * size * .65}`,
+          fill: "none", stroke: color, "stroke-width": 2.5, "stroke-linejoin": "round"
+        });
+      }
+    }
+
+    function drawDiagram(revealed) {
+      plot.replaceChildren();
+      const center = { x: 260, y: 260 };
+      for (const radius of [70, 140, 210]) {
+        svgElement("circle", { cx: 260, cy: 260, r: radius, fill: "none", stroke: "#253650" });
+      }
+      for (let bearing = 0; bearing < 360; bearing += 10) {
+        const major = bearing % 30 === 0;
+        const inner = major ? 200 : 205;
+        svgElement("line", {
+          x1: 260 + inner * Math.sin(bearing * DEG), y1: 260 - inner * Math.cos(bearing * DEG),
+          x2: 260 + 210 * Math.sin(bearing * DEG), y2: 260 - 210 * Math.cos(bearing * DEG),
+          stroke: "#63748e", "stroke-width": major ? 2 : 1
+        });
+      }
+      for (const [label, bearing] of [["N / 000", 0], ["E / 090", 90], ["S / 180", 180], ["W / 270", 270]]) {
+        svgElement("text", {
+          x: 260 + 240 * Math.sin(bearing * DEG), y: 260 - 240 * Math.cos(bearing * DEG),
+          fill: "#afbed2", "font-size": 12, "text-anchor": "middle", "dominant-baseline": "middle",
+          transform: bearing === 90 || bearing === 270
+            ? `rotate(${bearing === 90 ? 90 : -90},${260 + 240 * Math.sin(bearing * DEG)},260)` : ""
+        }, label);
+      }
+      if (revealed) {
+        const scale = 185 / Math.max(question.tas, solution.gs, question.windSpeed);
+        const point = vector => ({ x: 260 + vector.x * scale, y: 260 - vector.y * scale });
+        const airTip = point(solution.air);
+        const groundTip = point(solution.ground);
+        drawVector(center, groundTip, "#76d8c3", 2);
+        drawVector(center, airTip, "#a7b7ff", 1);
+        drawVector(airTip, groundTip, "#f7bc71", 3);
+        byId("diagram-note").textContent = "Solved triangle, to one velocity scale: heading / TAS + wind = track / GS. Wind is drawn head-to-tail.";
+      } else {
+        const trackTip = { x: 260 + 185 * Math.sin(question.track * DEG), y: 260 - 185 * Math.cos(question.track * DEG) };
+        drawVector(center, trackTip, "#76d8c3", 2, true);
+        const scale = 185 / question.tas;
+        drawVector(center, { x: 260 + solution.wind.x * scale, y: 260 - solution.wind.y * scale }, "#f7bc71", 3);
+        byId("diagram-note").textContent = "Track is a direction guide only; its length does not reveal GS. Wind length is relative to TAS. Check your answer to reveal the complete triangle.";
+      }
+      svgElement("circle", { cx: 260, cy: 260, r: 4, fill: "#e8eef8" });
+      if (question.windSpeed === 0) {
+        svgElement("text", { x: 260, y: 290, fill: "#f7bc71", "font-size": 13, "text-anchor": "middle" }, "Calm: zero wind vector");
+      }
+      byId("diagram-title").textContent = revealed ? "Solved wind triangle" : "Wind and required track";
+      byId("diagram-description").textContent =
+        `North-up. Required track ${formatBearing(question.track)}, two chevrons. Wind from ${formatBearing(question.windFrom)} at ${question.windSpeed} knots, three chevrons pointing downwind.` +
+        (revealed ? ` Heading ${formatBearing(solution.heading, 2)}, one chevron. Ground speed ${solution.gs.toFixed(2)} knots. Vectors share one scale.` : " Heading and ground speed are not shown. Track length is arbitrary.");
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function setQuestion(next) {
+      question = next;
+      solution = solveWindTriangle(question);
+      byId("wind-value").textContent = `${formatBearing(question.windFrom)} / ${question.windSpeed} kt`;
+      byId("track-value").textContent = `${formatBearing(question.track)} T`;
+      byId("tas-value").textContent = `${question.tas} kt`;
+      form.reset();
+      feedback.hidden = true;
+      feedback.replaceChildren();
+      drawDiagram(false);
+    }
+
+    function newQuestion() {
+      setQuestion({
+        windFrom: randomInt(0, 359), windSpeed: randomInt(0, 30),
+        track: randomInt(0, 359), tas: randomInt(70, 160)
+      });
+    }
+
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const heading = byId("heading").valueAsNumber;
+      const gs = byId("ground-speed").valueAsNumber;
+      if (!Number.isFinite(heading) || !Number.isFinite(gs)) return;
+      const result = gradeAnswer(heading, gs, solution);
+      const passed = result.headingOK && result.gsOK;
+      const drift = Math.abs(solution.drift) < 0.005
+        ? "No drift"
+        : `${Math.abs(solution.drift).toFixed(2)}\u00b0 ${solution.drift > 0 ? "right" : "left"}`;
+      feedback.hidden = false;
+      feedback.className = passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = passed ? "Correct within mechanical-computer tolerance." : "Outside tolerance. Compare your readings below.";
+      feedback.appendChild(title);
+      for (const text of [
+        `Heading: ${formatBearing(solution.heading, 2)} T | GS: ${solution.gs.toFixed(2)} kt`,
+        `Drift: ${drift}.`,
+        `Heading ${result.headingOK ? "within tolerance" : "outside tolerance"} (${result.headingError.toFixed(2)}\u00b0 error). GS ${result.gsOK ? "within tolerance" : "outside tolerance"} (${result.gsError.toFixed(2)} kt error).`
+      ]) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+      drawDiagram(true);
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      newQuestion();
+      byId("heading").focus();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({ windFrom: 30, windSpeed: 25, track: 100, tas: 90 });
+      byId("heading").focus();
+    });
+    newQuestion();
+  </script>
+</body>
+</html>
