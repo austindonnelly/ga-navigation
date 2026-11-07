@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Speed, Time &amp; Distance | Navigation Quiz</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <style>
+    .parameters { grid-template-columns: repeat(2, 1fr); }
+    fieldset { border: 0; padding: 0; margin: 18px 0; min-width: 0; }
+    legend { font-size: .9rem; font-weight: 600; }
+    .time-options { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+    .time-options label { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; }
+    .time-options input { width: auto; accent-color: #76d8c3; }
+    .time-parts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav aria-label="Quiz navigation"><a href="index.html">All quizzes</a></nav>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>Speed, Time &amp; Distance</h1>
+      <p class="muted">Use your CRP-1 or pencil and paper to find the missing time or distance.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your flight leg</h2>
+        <dl class="parameters">
+          <div><dt>Airspeed</dt><dd id="speed-value"></dd></div>
+          <div><dt id="known-label"></dt><dd id="known-value"></dd></div>
+        </dl>
+        <p id="question-text"></p>
+        <p class="muted">Assume no wind and constant speed: airspeed equals ground speed. One knot is one nautical mile per hour.</p>
+        <p class="muted">Time may be given in minutes or hours and minutes. For example, 1 h 20 min is 80 minutes, not 1.20 hours.</p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">How long will it take?</h2>
+        <form id="quiz-form">
+          <fieldset id="time-answer">
+            <legend>Time format</legend>
+            <div class="time-options">
+              <label><input type="radio" name="time-format" value="minutes" checked>Minutes</label>
+              <label><input type="radio" name="time-format" value="hours">Hours and minutes</label>
+            </div>
+            <div id="minutes-answer">
+              <label for="total-minutes">Flight time</label>
+              <div class="input-row">
+                <input id="total-minutes" name="totalMinutes" type="number" min="0.01" step="any" required inputmode="decimal" autocomplete="off" placeholder="15.6">
+                <span class="unit">min</span>
+              </div>
+            </div>
+            <div id="hours-answer" class="time-parts" hidden>
+              <div>
+                <label for="hours">Hours</label>
+                <input id="hours" name="hours" type="number" min="0" step="1" value="0" required inputmode="numeric" autocomplete="off" disabled>
+              </div>
+              <div>
+                <label for="minutes">Minutes (&lt;60)</label>
+                <input id="minutes" name="minutes" type="number" min="0" max="59.999999" step="any" required inputmode="decimal" autocomplete="off" disabled>
+              </div>
+            </div>
+          </fieldset>
+          <fieldset id="distance-answer" hidden disabled>
+            <legend>Distance</legend>
+            <label for="distance">Distance flown</label>
+            <div class="input-row">
+              <input id="distance" name="distance" type="number" min="0.01" step="any" required inputmode="decimal" autocomplete="off">
+              <span class="unit">nm</span>
+            </div>
+          </fieldset>
+          <p id="tolerance" class="muted tolerance"></p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+        <details>
+          <summary>How the answers are calculated</summary>
+          <p><code>Time (minutes) = distance (nm) &times; 60 / speed (kt)</code>.</p>
+          <p><code>Distance (nm) = speed (kt) &times; time (minutes) / 60</code>.</p>
+          <p>Convert hours and minutes to total minutes first: <code>total minutes = hours &times; 60 + minutes</code>.</p>
+          <p>The reference uses 77 kt and 20 nm: <code>20 &times; 60 / 77 = 15.5844...</code> minutes. Rounded to one decimal place, the answer is 15.6 minutes.</p>
+        </details>
+      </section>
+    </div>
+    <footer>Random exercises: speed 50&ndash;150 kt, legs 10&ndash;150 nm. Simplified no-wind practice only; not for operational navigation.</footer>
+  </main>
+  <script>
+    "use strict";
+
+    const ANSWER_TOLERANCE = 0.5;
+
+    function solveLeg({ kind, speed, distance, minutes }) {
+      if (kind !== "time" && kind !== "distance") {
+        throw new Error("Question must ask for time or distance.");
+      }
+      const known = kind === "time" ? distance : minutes;
+      if (!Number.isFinite(speed) || speed <= 0 || !Number.isFinite(known) || known <= 0) {
+        throw new Error("Speed and the given time or distance must be finite and positive.");
+      }
+      const answer = kind === "time" ? distance * 60 / speed : speed * minutes / 60;
+      if (!Number.isFinite(answer) || answer <= 0) {
+        throw new Error("The flight leg must have a finite, positive answer.");
+      }
+      return answer;
+    }
+
+    function timeInMinutes(hours, minutes) {
+      if (!Number.isInteger(hours) || hours < 0 || !Number.isFinite(minutes) || minutes < 0 || minutes >= 60) {
+        throw new Error("Use whole nonnegative hours and minutes from 0 up to, but not including, 60.");
+      }
+      const total = hours * 60 + minutes;
+      if (!Number.isFinite(total) || total <= 0) {
+        throw new Error("Flight time must be finite and greater than zero.");
+      }
+      return total;
+    }
+
+    function gradeAnswer(answer, solution) {
+      if (!Number.isFinite(answer) || answer <= 0 || !Number.isFinite(solution) || solution <= 0) {
+        throw new Error("Answer and solution must be finite and positive.");
+      }
+      const error = Math.abs(answer - solution);
+      return { error, passed: error <= ANSWER_TOLERANCE + 1e-9 };
+    }
+
+    function formatTime(minutes, hoursAndMinutes = false) {
+      const tenths = Math.round(minutes * 10);
+      if (!hoursAndMinutes) return `${tenths / 10} min`;
+      return `${Math.floor(tenths / 600)} h ${(tenths % 600) / 10} min`;
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const speed = randomInt(50, 150);
+      if (Math.random() < 0.5) {
+        return { kind: "time", speed, distance: randomInt(10, 150) };
+      }
+      return {
+        kind: "distance", speed,
+        minutes: randomInt(Math.ceil(10 * 60 / speed), Math.floor(150 * 60 / speed)),
+        hoursAndMinutes: Math.random() < 0.5
+      };
+    }
+
+    const byId = id => document.getElementById(id);
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    let question;
+    let solution;
+
+    function clearFeedback() {
+      feedback.hidden = true;
+      feedback.className = "";
+      feedback.replaceChildren();
+    }
+
+    function updateTimeFormat() {
+      const hoursFormat = form.elements["time-format"].value === "hours";
+      byId("minutes-answer").hidden = hoursFormat;
+      byId("hours-answer").hidden = !hoursFormat;
+      byId("total-minutes").disabled = hoursFormat;
+      byId("hours").disabled = !hoursFormat;
+      byId("minutes").disabled = !hoursFormat;
+      byId("minutes").setCustomValidity("");
+      clearFeedback();
+    }
+
+    function setQuestion(next) {
+      const nextSolution = solveLeg(next);
+      question = next;
+      solution = nextSolution;
+      form.reset();
+      updateTimeFormat();
+      const findTime = question.kind === "time";
+      byId("time-answer").hidden = !findTime;
+      byId("time-answer").disabled = !findTime;
+      byId("distance-answer").hidden = findTime;
+      byId("distance-answer").disabled = findTime;
+      byId("speed-value").textContent = `${question.speed} kt`;
+      byId("known-label").textContent = findTime ? "Distance" : "Flight time";
+      byId("known-value").textContent = findTime
+        ? `${question.distance} nm`
+        : formatTime(question.minutes, question.hoursAndMinutes);
+      byId("question-text").textContent = findTime
+        ? `At ${question.speed} kt, how long does a ${question.distance} nm leg take?`
+        : `At ${question.speed} kt, how far do you fly in ${formatTime(question.minutes, question.hoursAndMinutes)}?`;
+      byId("answer-title").textContent = findTime ? "How long will it take?" : "How far will you fly?";
+      byId("tolerance").textContent = findTime
+        ? "Mechanical-computer leeway: \u00b10.5 minute. Decimal minutes are welcome in either time format."
+        : "Mechanical-computer leeway: \u00b10.5 nm. Decimal nautical miles are welcome.";
+    }
+
+    function focusAnswer() {
+      byId(question.kind === "time" ? "total-minutes" : "distance").focus();
+    }
+
+    form.addEventListener("input", () => {
+      byId("minutes").setCustomValidity("");
+      clearFeedback();
+    });
+    for (const radio of form.elements["time-format"]) {
+      radio.addEventListener("change", updateTimeFormat);
+    }
+
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      let answer;
+      if (question.kind === "distance") {
+        answer = byId("distance").valueAsNumber;
+      } else if (form.elements["time-format"].value === "minutes") {
+        answer = byId("total-minutes").valueAsNumber;
+      } else {
+        const hours = byId("hours").valueAsNumber;
+        const minutes = byId("minutes").valueAsNumber;
+        if (hours === 0 && minutes === 0) {
+          byId("minutes").setCustomValidity("Flight time must be greater than zero.");
+          form.reportValidity();
+          return;
+        }
+        answer = timeInMinutes(hours, minutes);
+      }
+      const result = gradeAnswer(answer, solution);
+      feedback.hidden = false;
+      feedback.className = result.passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = result.passed
+        ? "Correct within mechanical-computer tolerance."
+        : "Outside tolerance. Compare your reading below.";
+      feedback.appendChild(title);
+      const findTime = question.kind === "time";
+      const texts = findTime ? [
+        `Time: ${solution.toFixed(1)} min (${formatTime(solution, true)}).`,
+        `${question.distance} \u00d7 60 / ${question.speed} = ${solution.toFixed(4)} min.`
+      ] : [
+        `Distance: ${solution.toFixed(1)} nm.`,
+        `${question.speed} \u00d7 ${question.minutes} / 60 = ${solution.toFixed(4)} nm.`
+      ];
+      texts.push(`Your error: ${result.error.toFixed(2)} ${findTime ? "min" : "nm"}.`);
+      for (const text of texts) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      setQuestion(generateQuestion());
+      focusAnswer();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({ kind: "time", speed: 77, distance: 20 });
+      focusAnswer();
+    });
+    setQuestion(generateQuestion());
+  </script>
+</body>
+</html>

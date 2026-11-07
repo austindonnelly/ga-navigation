@@ -13,6 +13,10 @@ p { line-height: 1.6; }
 .layout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px; align-items: start; }
 .panel { background: #141f33; border: 1px solid #2c3b54; border-radius: 18px; padding: 24px; }
 h2 { margin: 0 0 18px; font-size: 1.1rem; }
+.parameters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 0 0 20px; }
+.parameters div { padding: 13px 10px; background: #0e182a; border-radius: 10px; }
+dt { font-size: .75rem; color: #afbed2; margin-bottom: 7px; }
+dd { margin: 0; font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 label { display: block; margin: 18px 0 7px; font-size: .9rem; font-weight: 600; }
 .input-row { display: flex; align-items: center; gap: 12px; }
 input { width: 100%; min-width: 0; padding: 13px; border: 1px solid #52637d; border-radius: 9px; background: #0c1424; color: #e8eef8; font: inherit; font-size: 1.15rem; }
