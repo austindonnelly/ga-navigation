@@ -25,3 +25,5 @@ For vertical navigation, use `simple-vertical-navigation-quiz.html` as prior art
 For airspeed correction, use `true-airspeed-quiz.html` as prior art. Convert QNH-set indicated altitude to pressure altitude before using OAT and CAS. Keep pressure-altitude conversion independent of OAT, permit negative pressure altitudes, and state whether compressibility is ignored. If allowing a pressure-altitude rule of thumb, name it explicitly and keep the ISA result as the reference.
 
 For true altitude, use `true-altitude-quiz.html` as prior art. State the simplified CRP-1 model and sea-level reference assumption. Use the requested 30 ft/hPa pressure conversion, then the ratio of calibrated OAT to ISA temperature at pressure altitude in kelvin; apply that ratio to indicated altitude, not pressure altitude.
+
+For fuel mass, use `fuel-mass-quiz.html` as prior art. Always distinguish US gallons from imperial gallons. Convert volume to litres before applying the stated specific gravity, then convert mass from kg to lbs if requested. Keep full precision when solving and use unit-specific grading tolerances.

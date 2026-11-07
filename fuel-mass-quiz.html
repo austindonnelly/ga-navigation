@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Fuel Mass | Navigation Quiz</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <style>
+    .parameters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav aria-label="Quiz navigation"><a href="index.html">All quizzes</a></nav>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>Fuel Mass</h1>
+      <p class="muted">Test your fuel calculations with a CRP-1 or pencil and paper.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your fuel quantity</h2>
+        <dl class="parameters">
+          <div><dt>AVGAS volume</dt><dd id="volume-value"></dd></div>
+          <div><dt>Specific gravity</dt><dd id="specific-gravity-value"></dd></div>
+        </dl>
+        <p id="question-text"></p>
+        <p class="muted">Assume the stated specific gravity remains constant. No fuel-temperature correction is required.</p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">Your answer</h2>
+        <form id="quiz-form">
+          <label id="mass-label" for="mass">Fuel mass</label>
+          <div class="input-row">
+            <input id="mass" name="mass" type="number" min="0.01" step="any" required inputmode="decimal" autocomplete="off" aria-describedby="tolerance">
+            <span id="mass-unit" class="unit"></span>
+          </div>
+          <p id="tolerance" class="muted tolerance"></p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      </section>
+    </div>
+    <footer>Random exercises: AVGAS quantities equivalent to 10&ndash;300 litres, specific gravity 0.72; volume in litres, US gallons, or imperial gallons; mass in kg or lbs. Simplified practice only; not for operational fuel planning.</footer>
+  </main>
+  <script>
+    "use strict";
+
+    const AVGAS_SPECIFIC_GRAVITY = 0.72;
+    const KG_PER_POUND = 0.45359237;
+    const VOLUME_UNITS = Object.freeze({
+      litres: { label: "litres", litresPerUnit: 1 },
+      usGallons: { label: "US gallons", litresPerUnit: 3.785411784 },
+      imperialGallons: { label: "imperial gallons", litresPerUnit: 4.54609 }
+    });
+    const MASS_UNITS = Object.freeze({
+      kg: { label: "kg", minimumTolerance: 0.5 },
+      lbs: { label: "lbs", minimumTolerance: 1 }
+    });
+
+    function solveFuelMass({ quantity, volumeUnit, specificGravity, massUnit }) {
+      if (!Object.hasOwn(VOLUME_UNITS, volumeUnit) || !Object.hasOwn(MASS_UNITS, massUnit)) {
+        throw new Error("Volume must be in litres, US gallons, or imperial gallons; mass must be in kg or lbs.");
+      }
+      if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(specificGravity) || specificGravity <= 0) {
+        throw new Error("Fuel quantity and specific gravity must be finite and positive.");
+      }
+      const litres = quantity * VOLUME_UNITS[volumeUnit].litresPerUnit;
+      const kg = litres * specificGravity;
+      const lbs = kg / KG_PER_POUND;
+      const mass = massUnit === "kg" ? kg : lbs;
+      if (![litres, kg, lbs, mass].every(value => Number.isFinite(value) && value > 0)) {
+        throw new Error("Fuel volume and mass must remain finite and positive.");
+      }
+      return { litres, kg, lbs, mass, massUnit };
+    }
+
+    function gradeMass(answer, solution) {
+      if (!Object.hasOwn(MASS_UNITS, solution.massUnit) ||
+          !Number.isFinite(answer) || answer <= 0 || !Number.isFinite(solution.mass) || solution.mass <= 0) {
+        throw new Error("Answer and solution must be finite, positive masses in kg or lbs.");
+      }
+      const tolerance = Math.max(MASS_UNITS[solution.massUnit].minimumTolerance, solution.mass * 0.01);
+      const error = Math.abs(answer - solution.mass);
+      return { error, tolerance, passed: error <= tolerance + 1e-9 };
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const volumeUnits = Object.keys(VOLUME_UNITS);
+      const volumeUnit = volumeUnits[randomInt(0, volumeUnits.length - 1)];
+      const litresPerUnit = VOLUME_UNITS[volumeUnit].litresPerUnit;
+      return {
+        quantity: randomInt(Math.ceil(10 / litresPerUnit), Math.floor(300 / litresPerUnit)),
+        volumeUnit, specificGravity: AVGAS_SPECIFIC_GRAVITY,
+        massUnit: Math.random() < 0.5 ? "kg" : "lbs"
+      };
+    }
+
+    const byId = id => document.getElementById(id);
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    const answer = byId("mass");
+    let question;
+    let solution;
+
+    function clearFeedback() {
+      feedback.hidden = true;
+      feedback.className = "";
+      feedback.replaceChildren();
+    }
+
+    function setQuestion(next) {
+      const nextSolution = solveFuelMass(next);
+      question = next;
+      solution = nextSolution;
+      form.reset();
+      clearFeedback();
+      const volumeLabel = VOLUME_UNITS[question.volumeUnit].label;
+      const massLabel = MASS_UNITS[question.massUnit].label;
+      byId("volume-value").textContent = `${question.quantity} ${volumeLabel}`;
+      byId("specific-gravity-value").textContent = String(question.specificGravity);
+      byId("question-text").textContent =
+        `What is the mass in ${massLabel} of ${question.quantity} ${volumeLabel} of AVGAS with specific gravity ${question.specificGravity}?`;
+      byId("mass-label").textContent = `Fuel mass (${massLabel})`;
+      byId("mass-unit").textContent = massLabel;
+      byId("tolerance").textContent =
+        `Mechanical-computer leeway: \u00b11% or \u00b1${MASS_UNITS[question.massUnit].minimumTolerance} ${massLabel}, whichever is greater. Decimal masses are welcome.`;
+    }
+
+    form.addEventListener("input", clearFeedback);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const result = gradeMass(answer.valueAsNumber, solution);
+      feedback.hidden = false;
+      feedback.className = result.passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = result.passed
+        ? "Correct within mechanical-computer tolerance."
+        : "Outside tolerance. Compare your reading below.";
+      feedback.appendChild(title);
+      const texts = [
+        `Fuel mass: ${solution.mass.toFixed(1)} ${MASS_UNITS[question.massUnit].label}.`,
+        `Equivalent masses: ${solution.kg.toFixed(1)} kg or ${solution.lbs.toFixed(1)} lbs.`
+      ];
+      if (question.volumeUnit !== "litres") {
+        texts.push(`Volume: ${question.quantity} ${VOLUME_UNITS[question.volumeUnit].label} \u00d7 ${VOLUME_UNITS[question.volumeUnit].litresPerUnit} = ${solution.litres.toFixed(3)} litres.`);
+      }
+      texts.push(
+        `Mass in kg: ${solution.litres.toFixed(3)} litres \u00d7 ${question.specificGravity} = ${solution.kg.toFixed(3)} kg.`,
+        `Mass in lbs: ${solution.kg.toFixed(3)} / ${KG_PER_POUND} = ${solution.lbs.toFixed(3)} lbs.`,
+        `Your error: ${result.error.toFixed(2)} ${question.massUnit}. Allowed leeway: \u00b1${result.tolerance.toFixed(2)} ${question.massUnit}.`
+      );
+      for (const text of texts) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      setQuestion(generateQuestion());
+      answer.focus();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({ quantity: 120, volumeUnit: "litres", specificGravity: 0.72, massUnit: "kg" });
+      answer.focus();
+    });
+    setQuestion(generateQuestion());
+  </script>
+</body>
+</html>
