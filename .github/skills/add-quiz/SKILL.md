@@ -19,3 +19,5 @@ Keep the menu a short static list; no framework or quiz registry is needed. Exte
 Use the shared `.parameters` definition-list styling for known values. State wind assumptions explicitly when using airspeed for a distance/time calculation. Convert hours and minutes to total minutes before solving or grading; hours must be whole, minutes less than 60, and total time positive. Disable hidden answer fields so they do not interfere with form validation.
 
 Focused calculation tests live in `tests` and run with `node --test`. Keep them dependency-free; browser checks must still verify actual local-file behaviour.
+
+For vertical navigation, use `simple-vertical-navigation-quiz.html` as prior art. State any IAS = TAS simplification and use ground distance with wind-adjusted ground speed. Altitude changes are signed (negative for descent); final altitude adds that signed change to the initial altitude. Generate segments that finish at nonnegative altitudes, and grade approximate reference readings against the unrounded solution.

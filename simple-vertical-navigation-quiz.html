@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Simple Vertical Navigation | Navigation Quiz</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <style>
+    .parameters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav aria-label="Quiz navigation"><a href="index.html">All quizzes</a></nav>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>Simple Vertical Navigation</h1>
+      <p class="muted">Use your CRP-1 or pencil and paper to calculate altitude over a ground distance.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your climb or descent</h2>
+        <dl class="parameters">
+          <div><dt>Indicated airspeed (IAS)</dt><dd id="ias-value"></dd></div>
+          <div><dt>Wind along track</dt><dd id="wind-value"></dd></div>
+          <div><dt id="rate-label"></dt><dd id="rate-value"></dd></div>
+          <div><dt>Ground distance</dt><dd id="distance-value"></dd></div>
+          <div id="initial-altitude-parameter" hidden><dt>Initial altitude</dt><dd id="initial-altitude-value"></dd></div>
+        </dl>
+        <p id="question-text"></p>
+        <p class="muted">Simple model: treat IAS as true airspeed (TAS). Airspeed, wind, and climb or descent rate remain constant. Wind is directly along track; ignore crosswind and the effect of climb angle on horizontal speed.</p>
+        <p class="muted">Add tailwind to airspeed, subtract headwind; calm leaves it unchanged. Distance is over the ground. Initial and final altitudes use the same datum.</p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">What is the altitude change?</h2>
+        <form id="quiz-form">
+          <label id="altitude-label" for="altitude">Altitude change</label>
+          <div class="input-row">
+            <input id="altitude" name="altitude" type="number" step="any" required inputmode="decimal" autocomplete="off" aria-describedby="answer-note tolerance">
+            <span class="unit">ft</span>
+          </div>
+          <p id="answer-note" class="muted"></p>
+          <p id="tolerance" class="muted tolerance">Mechanical-computer leeway: &plusmn;50 ft. Decimal feet are welcome.</p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+        <details>
+          <summary>How the answers are calculated</summary>
+          <p><code>GS (kt) = IAS + tailwind</code>, or <code>IAS - headwind</code>, under this quiz's IAS = TAS assumption.</p>
+          <p><code>Time (minutes) = ground distance (nm) &times; 60 / GS (kt)</code>.</p>
+          <p><code>Altitude change (ft) = vertical speed (ft/min) &times; time (minutes)</code>. Use positive vertical speed for a climb and negative for a descent.</p>
+          <p><code>Final altitude = initial altitude + altitude change</code>. Keep full precision until the final answer.</p>
+          <p>The reference uses IAS 75 kt, tailwind 20 kt, climb rate 500 ft/min, and ground distance 5 nm. GS is 95 kt; time is <code>300 / 95 = 3.1579...</code> minutes, giving <code>500 &times; 300 / 95 = 1578.9474...</code> ft gained. A CRP-1 reading of 1,575 ft passes the stated tolerance.</p>
+        </details>
+      </section>
+    </div>
+    <footer>Random exercises: IAS 50&ndash;150 kt, head/tailwind 5&ndash;30 kt or calm, vertical rates 250&ndash;750 ft/min, distances 1&ndash;10 nm. Altitude changes are limited to 4,000 ft; final-altitude scenarios stay between 500 and 10,000 ft. Simplified practice only; not for operational navigation.</footer>
+  </main>
+  <script>
+    "use strict";
+
+    const ALTITUDE_TOLERANCE = 50;
+
+    function solveVerticalNavigation({ kind, ias, wind, verticalSpeed, distance, initialAltitude }) {
+      if (kind !== "change" && kind !== "final") {
+        throw new Error("Question must ask for altitude change or final altitude.");
+      }
+      if (![ias, wind, verticalSpeed, distance].every(Number.isFinite) ||
+          ias <= 0 || verticalSpeed === 0 || distance <= 0) {
+        throw new Error("IAS and distance must be finite and positive; wind and nonzero vertical speed must be finite.");
+      }
+      const gs = ias + wind;
+      if (!Number.isFinite(gs) || gs <= 0) {
+        throw new Error("Wind must allow positive ground speed.");
+      }
+      const minutes = distance * 60 / gs;
+      const change = verticalSpeed * minutes;
+      if (!Number.isFinite(minutes) || minutes <= 0 || !Number.isFinite(change) || change === 0) {
+        throw new Error("The flight segment must have finite time and a nonzero, finite altitude change.");
+      }
+      let answer = change;
+      if (kind === "final") {
+        if (!Number.isFinite(initialAltitude) || initialAltitude < 0) {
+          throw new Error("Initial altitude must be finite and nonnegative.");
+        }
+        answer = initialAltitude + change;
+        if (!Number.isFinite(answer) || answer < 0) {
+          throw new Error("The segment must end at a finite, nonnegative altitude.");
+        }
+      }
+      return { gs, minutes, change, answer };
+    }
+
+    function gradeAltitude(answer, solution) {
+      if (!Number.isFinite(answer) || !Number.isFinite(solution)) {
+        throw new Error("Answer and solution must be finite altitudes.");
+      }
+      const error = Math.abs(answer - solution);
+      return { error, passed: error <= ALTITUDE_TOLERANCE + 1e-9 };
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const ias = randomInt(50, 150);
+      const windType = randomInt(-1, 1);
+      const wind = windType === 0 ? 0 : windType * randomInt(5, 30);
+      const verticalSpeed = randomInt(5, 15) * 50 * (Math.random() < 0.5 ? -1 : 1);
+      const maxDistance = Math.min(10, Math.floor(4000 * (ias + wind) / (60 * Math.abs(verticalSpeed))));
+      const question = {
+        kind: Math.random() < 0.5 ? "change" : "final",
+        ias, wind, verticalSpeed, distance: randomInt(1, maxDistance)
+      };
+      if (question.kind === "final") {
+        const { change } = solveVerticalNavigation({ ...question, kind: "change" });
+        question.initialAltitude = change < 0
+          ? randomInt(Math.ceil((500 - change) / 500), 16) * 500
+          : randomInt(1, Math.floor((10000 - change) / 500)) * 500;
+      }
+      return question;
+    }
+
+    function describeWind(wind) {
+      if (wind === 0) return "Calm";
+      return `${wind > 0 ? "Tailwind" : "Headwind"} ${Math.abs(wind)} kt`;
+    }
+
+    const byId = id => document.getElementById(id);
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    const altitude = byId("altitude");
+    let question;
+    let solution;
+
+    function clearFeedback() {
+      feedback.hidden = true;
+      feedback.className = "";
+      feedback.replaceChildren();
+    }
+
+    function setQuestion(next) {
+      const nextSolution = solveVerticalNavigation(next);
+      question = next;
+      solution = nextSolution;
+      form.reset();
+      clearFeedback();
+      const findFinal = question.kind === "final";
+      const climbing = question.verticalSpeed > 0;
+      byId("ias-value").textContent = `${question.ias} kt`;
+      byId("wind-value").textContent = describeWind(question.wind);
+      byId("rate-label").textContent = climbing ? "Climb rate" : "Descent rate";
+      byId("rate-value").textContent = `${Math.abs(question.verticalSpeed)} ft/min`;
+      byId("distance-value").textContent = `${question.distance} nm`;
+      byId("initial-altitude-parameter").hidden = !findFinal;
+      byId("initial-altitude-value").textContent = findFinal ? `${question.initialAltitude} ft` : "";
+      const conditions = `At IAS ${question.ias} kt with ${question.wind === 0 ? "calm wind" : describeWind(question.wind).toLowerCase()}, ` +
+        `${climbing ? "climbing" : "descending"} at ${Math.abs(question.verticalSpeed)} ft/min`;
+      byId("question-text").textContent = findFinal
+        ? `${conditions} from ${question.initialAltitude} ft, what final altitude is expected after ${question.distance} nm over the ground?`
+        : `${conditions}, what altitude change is expected after ${question.distance} nm over the ground?`;
+      byId("answer-title").textContent = findFinal ? "What is the final altitude?" : "What is the altitude change?";
+      byId("altitude-label").textContent = findFinal ? "Final altitude" : "Altitude change";
+      byId("answer-note").textContent = findFinal
+        ? "Enter the final altitude, not the amount gained or lost."
+        : "Enter a positive change for a climb or a negative change for a descent.";
+      if (findFinal) altitude.min = "0";
+      else altitude.removeAttribute("min");
+    }
+
+    form.addEventListener("input", clearFeedback);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const result = gradeAltitude(altitude.valueAsNumber, solution.answer);
+      const findFinal = question.kind === "final";
+      feedback.hidden = false;
+      feedback.className = result.passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = result.passed
+        ? "Correct within mechanical-computer tolerance."
+        : "Outside tolerance. Compare your reading below.";
+      feedback.appendChild(title);
+      const texts = [
+        `${findFinal ? "Final altitude" : "Altitude change"}: ${solution.answer.toFixed(1)} ft.`,
+        `Ground speed: ${question.ias} ${question.wind < 0 ? "-" : "+"} ${Math.abs(question.wind)} = ${solution.gs} kt.`,
+        `Time: ${question.distance} \u00d7 60 / ${solution.gs} = ${solution.minutes.toFixed(4)} min.`,
+        `Altitude change: ${question.verticalSpeed} \u00d7 ${solution.minutes.toFixed(4)} = ${solution.change.toFixed(1)} ft (${solution.change > 0 ? "gained" : "lost"}).`
+      ];
+      if (findFinal) {
+        texts.push(`Final altitude: ${question.initialAltitude} ${solution.change < 0 ? "-" : "+"} ${Math.abs(solution.change).toFixed(1)} = ${solution.answer.toFixed(1)} ft.`);
+      }
+      texts.push(`Your error: ${result.error.toFixed(1)} ft.`);
+      for (const text of texts) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      setQuestion(generateQuestion());
+      altitude.focus();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({ kind: "change", ias: 75, wind: 20, verticalSpeed: 500, distance: 5 });
+      altitude.focus();
+    });
+    setQuestion(generateQuestion());
+  </script>
+</body>
+</html>
