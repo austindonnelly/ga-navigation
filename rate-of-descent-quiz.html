@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Rate of Descent (RoD) | Navigation Quiz</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <style>
+    .parameters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .unit { width: 60px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav aria-label="Quiz navigation"><a href="index.html">All quizzes</a></nav>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>Rate of Descent (RoD)</h1>
+      <p class="muted">Test your descent planning with a CRP-1 or pencil and paper.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your arrival</h2>
+        <dl class="parameters">
+          <div><dt>Destination</dt><dd id="destination-value"></dd></div>
+          <div><dt>Current distance to destination</dt><dd id="distance-value"></dd></div>
+          <div><dt>Cruising altitude</dt><dd id="altitude-value"></dd></div>
+          <div><dt>Ground speed</dt><dd id="speed-value"></dd></div>
+          <div><dt>Target altitude</dt><dd id="target-altitude-value"></dd></div>
+          <div><dt>Target point before destination</dt><dd id="target-distance-value"></dd></div>
+        </dl>
+        <p id="question-text"></p>
+        <p class="muted">Begin descending now, with constant ground speed and rate of descent. All distances are along the same ground track; altitudes use the same datum.</p>
+        <p class="muted">Airfield names provide context only. These are fictional scenarios, not published arrival procedures.</p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">Your answer</h2>
+        <form id="quiz-form">
+          <label for="rod">Required rate of descent</label>
+          <div class="input-row">
+            <input id="rod" name="rod" type="number" min="0.1" step="any" required inputmode="decimal" autocomplete="off" aria-describedby="answer-note tolerance">
+            <span class="unit">ft/min</span>
+          </div>
+          <p id="answer-note" class="muted">Enter a positive rate of descent.</p>
+          <p id="tolerance" class="muted tolerance">Mechanical-computer leeway: &plusmn;10 ft/min. Decimal rates are welcome.</p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      </section>
+    </div>
+    <footer>Random exercises: cruising altitude 3,500&ndash;8,000 ft, target altitude 1,000&ndash;2,500 ft, ground speed 50&ndash;150 kt, target point 3&ndash;10 nm before the airfield. Generated descent rates are 150&ndash;800 ft/min. Simplified practice only; not for operational navigation.</footer>
+  </main>
+  <script>
+    "use strict";
+
+    const ROD_TOLERANCE = 10;
+    const DESTINATIONS = Object.freeze(["Duxford", "Fowlmere", "Conington", "Old Warden", "Fenland"]);
+
+    function solveRateOfDescent({ destination, distanceToDestination, cruisingAltitude, groundSpeed, targetAltitude, targetDistance }) {
+      if (typeof destination !== "string" || destination.trim() === "") {
+        throw new Error("A destination name is required.");
+      }
+      if (![distanceToDestination, cruisingAltitude, groundSpeed, targetAltitude, targetDistance].every(Number.isFinite) ||
+          groundSpeed <= 0 || targetAltitude < 0 || cruisingAltitude <= targetAltitude ||
+          targetDistance < 0 || distanceToDestination <= targetDistance) {
+        throw new Error("Ground speed must be positive, the target altitude lower and nonnegative, and the target point ahead of the aircraft.");
+      }
+      const descentDistance = distanceToDestination - targetDistance;
+      const altitudeToLose = cruisingAltitude - targetAltitude;
+      const minutes = descentDistance * 60 / groundSpeed;
+      const rod = altitudeToLose / minutes;
+      if (![descentDistance, altitudeToLose, minutes, rod].every(value => Number.isFinite(value) && value > 0)) {
+        throw new Error("The descent must have finite, positive distance, altitude loss, time, and rate.");
+      }
+      return { descentDistance, altitudeToLose, minutes, rod };
+    }
+
+    function gradeRate(answer, solution) {
+      if (!Number.isFinite(answer) || answer <= 0 || !Number.isFinite(solution) || solution <= 0) {
+        throw new Error("Answer and solution must be finite, positive descent rates.");
+      }
+      const error = Math.abs(answer - solution);
+      return { error, passed: error <= ROD_TOLERANCE + 1e-9 };
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const cruisingAltitude = randomInt(35, 80) * 100;
+      const targetAltitude = randomInt(10, 25) * 100;
+      const groundSpeed = randomInt(50, 150);
+      const altitudeToLose = cruisingAltitude - targetAltitude;
+      const minDistance = Math.max(5, Math.ceil(altitudeToLose * groundSpeed / (60 * 800)));
+      const maxDistance = Math.min(40, Math.floor(altitudeToLose * groundSpeed / (60 * 150)));
+      const targetDistance = randomInt(3, 10);
+      return {
+        destination: DESTINATIONS[randomInt(0, DESTINATIONS.length - 1)],
+        distanceToDestination: randomInt(minDistance, maxDistance) + targetDistance,
+        cruisingAltitude, groundSpeed, targetAltitude, targetDistance
+      };
+    }
+
+    const byId = id => document.getElementById(id);
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    const answer = byId("rod");
+    let question;
+    let solution;
+
+    function clearFeedback() {
+      feedback.hidden = true;
+      feedback.className = "";
+      feedback.replaceChildren();
+    }
+
+    function setQuestion(next) {
+      const nextSolution = solveRateOfDescent(next);
+      question = next;
+      solution = nextSolution;
+      form.reset();
+      clearFeedback();
+      byId("destination-value").textContent = question.destination;
+      byId("distance-value").textContent = `${question.distanceToDestination} nm`;
+      byId("altitude-value").textContent = `${question.cruisingAltitude} ft`;
+      byId("speed-value").textContent = `${question.groundSpeed} kt`;
+      byId("target-altitude-value").textContent = `${question.targetAltitude} ft`;
+      byId("target-distance-value").textContent = `${question.targetDistance} nm`;
+      byId("question-text").textContent =
+        `${question.distanceToDestination} nm from your destination (${question.destination}), cruising at ${question.cruisingAltitude} ft ` +
+        `at ${question.groundSpeed} kt ground speed, you wish to be at ${question.targetAltitude} ft ${question.targetDistance} nm before the destination. What should your RoD be?`;
+    }
+
+    form.addEventListener("input", clearFeedback);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const result = gradeRate(answer.valueAsNumber, solution.rod);
+      feedback.hidden = false;
+      feedback.className = result.passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = result.passed
+        ? "Correct within mechanical-computer tolerance."
+        : "Outside tolerance. Compare your reading below.";
+      feedback.appendChild(title);
+      const texts = [
+        `Required RoD: ${solution.rod.toFixed(1)} ft/min.`,
+        `Descent distance: ${question.distanceToDestination} - ${question.targetDistance} = ${solution.descentDistance} nm.`,
+        `Altitude to lose: ${question.cruisingAltitude} - ${question.targetAltitude} = ${solution.altitudeToLose} ft.`,
+        `Time available: ${solution.descentDistance} \u00d7 60 / ${question.groundSpeed} = ${solution.minutes.toFixed(4)} min.`,
+        `RoD: ${solution.altitudeToLose} / ${solution.minutes.toFixed(4)} = ${solution.rod.toFixed(1)} ft/min.`,
+        `Your error: ${result.error.toFixed(1)} ft/min.`
+      ];
+      for (const text of texts) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      setQuestion(generateQuestion());
+      answer.focus();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({
+        destination: "Clacton", distanceToDestination: 20,
+        cruisingAltitude: 5000, groundSpeed: 77, targetAltitude: 2000, targetDistance: 5
+      });
+      answer.focus();
+    });
+    setQuestion(generateQuestion());
+  </script>
+</body>
+</html>

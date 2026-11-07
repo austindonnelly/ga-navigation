@@ -27,3 +27,5 @@ For airspeed correction, use `true-airspeed-quiz.html` as prior art. Convert QNH
 For true altitude, use `true-altitude-quiz.html` as prior art. State the simplified CRP-1 model and sea-level reference assumption. Use the requested 30 ft/hPa pressure conversion, then the ratio of calibrated OAT to ISA temperature at pressure altitude in kelvin; apply that ratio to indicated altitude, not pressure altitude.
 
 For fuel mass, use `fuel-mass-quiz.html` as prior art. Always distinguish US gallons from imperial gallons. Convert volume to litres before applying the stated specific gravity, then convert mass from kg to lbs if requested. Keep full precision when solving and use unit-specific grading tolerances.
+
+For descent planning, use `rate-of-descent-quiz.html` as prior art. Subtract the target point's distance before the destination from the current distance to find the available descent distance. Use ground speed and altitude loss; answers are positive descent rates. Real airfield names are context for fictional scenarios, not published procedures.
