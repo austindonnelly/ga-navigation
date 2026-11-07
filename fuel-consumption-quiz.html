@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Fuel Consumption | Navigation Quiz</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <style>
+    .parameters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .unit { width: 90px; flex-shrink: 0; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav aria-label="Quiz navigation"><a href="index.html">All quizzes</a></nav>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>Fuel Consumption</h1>
+      <p class="muted">Test your fuel and endurance calculations with a CRP-1 or pencil and paper.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your fuel readings</h2>
+        <dl class="parameters">
+          <div><dt>Fuel at start of flight</dt><dd id="initial-value"></dd></div>
+          <div><dt>Elapsed flight time</dt><dd id="elapsed-value"></dd></div>
+          <div><dt>Current fuel contents</dt><dd id="current-value"></dd></div>
+          <div><dt>Specific gravity (SpG)</dt><dd id="spg-value"></dd></div>
+          <div id="further-parameter" hidden><dt>Further flight time</dt><dd id="further-value"></dd></div>
+        </dl>
+        <p id="question-text"></p>
+        <p class="muted">Assume constant consumption and specific gravity, accurate readings, and that all indicated fuel is usable. No reserve deduction is included. Endurance is theoretical time to zero fuel, not a safe flight duration.</p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">Your answer</h2>
+        <form id="quiz-form">
+          <label id="answer-label" for="answer">Fuel remaining</label>
+          <div class="input-row">
+            <input id="answer" name="answer" type="number" min="0" step="any" required inputmode="decimal" autocomplete="off" aria-describedby="tolerance">
+            <span id="answer-unit" class="unit"></span>
+          </div>
+          <p id="tolerance" class="muted tolerance"></p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      </section>
+    </div>
+    <footer>Random exercises: starting fuel equivalent to 60&ndash;240 litres; readings 10&ndash;40 minutes apart; consumption 25&ndash;60 litres/hour; SpG 0.72 or 0.75. Volume units are always labelled as litres, US gallons, or imperial gallons. Simplified practice only; not for operational fuel planning.</footer>
+  </main>
+  <script src="assets/fuel.js"></script>
+  <script>
+    "use strict";
+
+    const ANSWER_UNITS = Object.freeze({
+      litres: { label: VOLUME_UNITS.litres.label, minimumTolerance: 0.5 },
+      usGallons: { label: VOLUME_UNITS.usGallons.label, minimumTolerance: 0.2 },
+      imperialGallons: { label: VOLUME_UNITS.imperialGallons.label, minimumTolerance: 0.2 },
+      kg: MASS_UNITS.kg,
+      lbs: MASS_UNITS.lbs,
+      minutes: { label: "min", minimumTolerance: 1 }
+    });
+
+    function solveFuelConsumption({ kind, initialQuantity, currentQuantity, volumeUnit, elapsedMinutes, furtherMinutes, specificGravity, answerUnit }) {
+      if (kind !== "fuel" && kind !== "endurance") {
+        throw new Error("Question must ask for fuel remaining or endurance remaining.");
+      }
+      if (!Object.hasOwn(ANSWER_UNITS, answerUnit) ||
+          (kind === "endurance" ? answerUnit !== "minutes" : answerUnit === "minutes")) {
+        throw new Error("Answer unit must match the requested fuel quantity or endurance.");
+      }
+      if (![initialQuantity, currentQuantity, elapsedMinutes, specificGravity].every(Number.isFinite) ||
+          currentQuantity < 0 || initialQuantity <= currentQuantity || elapsedMinutes <= 0 || specificGravity <= 0) {
+        throw new Error("Fuel must decrease between readings; time and specific gravity must be finite and positive.");
+      }
+      const usedVolume = initialQuantity - currentQuantity;
+      const burnPerMinute = usedVolume / elapsedMinutes;
+      const burnLitresPerHour = fuelVolumeToLitres(usedVolume, volumeUnit) * 60 / elapsedMinutes;
+      const enduranceMinutes = currentQuantity / burnPerMinute;
+      if (![burnPerMinute, burnLitresPerHour].every(value => Number.isFinite(value) && value > 0) ||
+          !Number.isFinite(enduranceMinutes) || enduranceMinutes < 0) {
+        throw new Error("Fuel readings must yield finite consumption and endurance.");
+      }
+      const common = { usedVolume, burnPerMinute, burnLitresPerHour, enduranceMinutes, answerUnit };
+      if (kind === "endurance") return { ...common, answer: enduranceMinutes };
+      if (!Number.isFinite(furtherMinutes) || furtherMinutes < 0 || furtherMinutes > enduranceMinutes) {
+        throw new Error("Further flight time must be finite, nonnegative, and no longer than remaining endurance.");
+      }
+      const remainingVolume = furtherMinutes === enduranceMinutes ? 0 : currentQuantity - burnPerMinute * furtherMinutes;
+      const remainingLitres = fuelVolumeToLitres(remainingVolume, volumeUnit);
+      const answer = fuelQuantityFromLitres(remainingLitres, answerUnit, specificGravity);
+      return { ...common, remainingVolume, remainingLitres, answer };
+    }
+
+    function gradeConsumption(answer, solution) {
+      if (!Object.hasOwn(ANSWER_UNITS, solution.answerUnit) ||
+          !Number.isFinite(answer) || answer < 0 || !Number.isFinite(solution.answer) || solution.answer < 0) {
+        throw new Error("Answer and solution must be finite, nonnegative quantities in a supported unit.");
+      }
+      const tolerance = Math.max(ANSWER_UNITS[solution.answerUnit].minimumTolerance, solution.answer * 0.01);
+      const error = Math.abs(answer - solution.answer);
+      return { error, tolerance, passed: error <= tolerance + 1e-9 };
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const volumeUnits = Object.keys(VOLUME_UNITS);
+      const volumeUnit = volumeUnits[randomInt(0, volumeUnits.length - 1)];
+      const litresPerUnit = VOLUME_UNITS[volumeUnit].litresPerUnit;
+      const initialQuantity = randomInt(Math.ceil(60 / litresPerUnit), Math.floor(240 / litresPerUnit));
+      const elapsedMinutes = randomInt(10, 40);
+      const minUsed = Math.ceil(25 * elapsedMinutes / (60 * litresPerUnit));
+      const maxUsed = Math.min(Math.floor(initialQuantity / 2), Math.floor(60 * elapsedMinutes / (60 * litresPerUnit)));
+      const usedVolume = randomInt(minUsed, maxUsed);
+      const currentQuantity = initialQuantity - usedVolume;
+      const kind = Math.random() < 0.5 ? "fuel" : "endurance";
+      const question = {
+        kind, initialQuantity, currentQuantity, volumeUnit, elapsedMinutes,
+        specificGravity: Math.random() < 0.5 ? 0.72 : 0.75, answerUnit: "minutes"
+      };
+      if (kind === "fuel") {
+        const fuelUnits = [...Object.keys(VOLUME_UNITS), ...Object.keys(MASS_UNITS)];
+        question.answerUnit = fuelUnits[randomInt(0, fuelUnits.length - 1)];
+        const enduranceMinutes = currentQuantity * elapsedMinutes / usedVolume;
+        question.furtherMinutes = randomInt(10, Math.min(180, Math.floor(enduranceMinutes * 0.8)));
+      }
+      return question;
+    }
+
+    const byId = id => document.getElementById(id);
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    const answer = byId("answer");
+    let question;
+    let solution;
+
+    function clearFeedback() {
+      feedback.hidden = true;
+      feedback.className = "";
+      feedback.replaceChildren();
+    }
+
+    function setQuestion(next) {
+      const nextSolution = solveFuelConsumption(next);
+      question = next;
+      solution = nextSolution;
+      form.reset();
+      clearFeedback();
+      const volumeLabel = VOLUME_UNITS[question.volumeUnit].label;
+      const answerLabel = ANSWER_UNITS[question.answerUnit].label;
+      byId("initial-value").textContent = `${question.initialQuantity} ${volumeLabel}`;
+      byId("elapsed-value").textContent = `${question.elapsedMinutes} min`;
+      byId("current-value").textContent = `${question.currentQuantity} ${volumeLabel}`;
+      byId("spg-value").textContent = String(question.specificGravity);
+      byId("further-parameter").hidden = question.kind !== "fuel";
+      byId("further-value").textContent = question.kind === "fuel" ? `${question.furtherMinutes} min` : "";
+      const readings = `Fuel available at the start of the flight is ${question.initialQuantity} ${volumeLabel}. ` +
+        `After ${question.elapsedMinutes} minutes of flight, fuel contents show ${question.currentQuantity} ${volumeLabel}. `;
+      byId("question-text").textContent = readings + (question.kind === "fuel"
+        ? `Assuming constant consumption, after a further ${question.furtherMinutes} minutes of flight, how much fuel in ${answerLabel} will remain? Assume SpG is ${question.specificGravity}.`
+        : `Assuming constant consumption, how many further minutes of flight remain from the current reading until fuel reaches zero? Assume SpG is ${question.specificGravity}.`);
+      byId("answer-label").textContent = question.kind === "fuel" ? `Fuel remaining (${answerLabel})` : "Endurance remaining (minutes)";
+      byId("answer-unit").textContent = answerLabel;
+      byId("tolerance").textContent =
+        `Mechanical-computer leeway: \u00b11% or \u00b1${ANSWER_UNITS[question.answerUnit].minimumTolerance} ${answerLabel}, whichever is greater.`;
+    }
+
+    form.addEventListener("input", clearFeedback);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const result = gradeConsumption(answer.valueAsNumber, solution);
+      feedback.hidden = false;
+      feedback.className = result.passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = result.passed ? "Correct within mechanical-computer tolerance." : "Outside tolerance. Compare your calculation below.";
+      feedback.appendChild(title);
+      const volumeLabel = VOLUME_UNITS[question.volumeUnit].label;
+      const answerLabel = ANSWER_UNITS[question.answerUnit].label;
+      const texts = [
+        `${question.kind === "fuel" ? "Fuel" : "Endurance"} remaining: ${solution.answer.toFixed(1)} ${answerLabel}.`,
+        `Fuel consumed: ${question.initialQuantity} - ${question.currentQuantity} = ${solution.usedVolume} ${volumeLabel}.`,
+        `Consumption: ${solution.usedVolume} / ${question.elapsedMinutes} = ${solution.burnPerMinute.toFixed(4)} ${volumeLabel}/min (${solution.burnLitresPerHour.toFixed(2)} litres/hour).`
+      ];
+      if (question.kind === "fuel") {
+        texts.push(
+          `Fuel remaining after the further flight period: ${question.currentQuantity} - (${solution.burnPerMinute.toFixed(4)} \u00d7 ${question.furtherMinutes}) = ${solution.remainingVolume.toFixed(3)} ${volumeLabel}.`,
+          `Equivalent fuel remaining: ${solution.remainingLitres.toFixed(3)} litres.`,
+          `Mass remaining: ${solution.remainingLitres.toFixed(3)} \u00d7 ${question.specificGravity} = ${fuelQuantityFromLitres(solution.remainingLitres, "kg", question.specificGravity).toFixed(3)} kg, or ${fuelQuantityFromLitres(solution.remainingLitres, "lbs", question.specificGravity).toFixed(3)} lbs.`
+        );
+      } else {
+        texts.push(`Endurance from the current reading: ${question.currentQuantity} / ${solution.burnPerMinute.toFixed(4)} = ${solution.enduranceMinutes.toFixed(1)} min. Specific gravity does not change this volume-based time calculation.`);
+      }
+      texts.push(`Your error: ${result.error.toFixed(2)} ${answerLabel}. Allowed leeway: \u00b1${result.tolerance.toFixed(2)} ${answerLabel}.`);
+      for (const text of texts) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      setQuestion(generateQuestion());
+      answer.focus();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({
+        kind: "fuel", initialQuantity: 42, currentQuantity: 36, volumeUnit: "usGallons",
+        elapsedMinutes: 24, furtherMinutes: 48, specificGravity: 0.75, answerUnit: "kg"
+      });
+      answer.focus();
+    });
+    setQuestion(generateQuestion());
+  </script>
+</body>
+</html>

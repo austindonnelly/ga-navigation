@@ -15,64 +15,91 @@
       <p class="muted">Practise with your CRP-1 flight computer or pencil and paper. Pick a problem to work on.</p>
     </header>
     <nav aria-label="Available quizzes">
-      <ul class="quiz-list">
-        <li>
-          <a class="panel quiz-card" href="wind-triangle-quiz.html">
-            <h2>Wind Triangle</h2>
-            <p class="muted">Find the heading to fly and ground speed from wind, required track, and true airspeed.</p>
-            <span class="quiz-action">Start quiz &rarr;</span>
-          </a>
-        </li>
-        <li>
-          <a class="panel quiz-card" href="speed-time-distance-quiz.html">
-            <h2>Speed, Time &amp; Distance</h2>
-            <p class="muted">Given airspeed and either time or distance, find the missing value for a single flight leg.</p>
-            <span class="quiz-action">Start quiz &rarr;</span>
-          </a>
-        </li>
-        <li>
-          <a class="panel quiz-card" href="simple-vertical-navigation-quiz.html">
-            <h2>Simple Vertical Navigation</h2>
-            <p class="muted">Allow for headwind or tailwind, then find altitude gained or lost, or final altitude, during a climb or descent.</p>
-            <span class="quiz-action">Start quiz &rarr;</span>
-          </a>
-        </li>
-        <li>
-          <a class="panel quiz-card" href="true-airspeed-quiz.html">
-            <h2>True Airspeed (TAS)</h2>
-            <p class="muted">Calculate pressure altitude from indicated altitude and QNH, then find TAS using OAT and calibrated airspeed.</p>
-            <span class="quiz-action">Start quiz &rarr;</span>
-          </a>
-        </li>
-        <li>
-          <a class="panel quiz-card" href="true-altitude-quiz.html">
-            <h2>True Altitude</h2>
-            <p class="muted">Find true altitude from QNH-set indicated altitude and calibrated outside air temperature.</p>
-            <span class="quiz-action">Start quiz &rarr;</span>
-          </a>
-        </li>
-        <li>
-          <a class="panel quiz-card" href="fuel-mass-quiz.html">
-            <h2>Fuel Mass</h2>
-            <p class="muted">Calculate AVGAS mass in kg or lbs from litres, US gallons, or imperial gallons and specific gravity.</p>
-            <span class="quiz-action">Start quiz &rarr;</span>
-          </a>
-        </li>
-        <li>
-          <a class="panel quiz-card" href="rate-of-descent-quiz.html">
-            <h2>Rate of Descent (RoD)</h2>
-            <p class="muted">Find the descent rate needed to reach a target altitude before arriving at an airfield.</p>
-            <span class="quiz-action">Start quiz &rarr;</span>
-          </a>
-        </li>
-        <li>
-          <a class="panel quiz-card" href="heading-track-quiz.html">
-            <h2>Heading &amp; Track (TVMDC)</h2>
-            <p class="muted">Convert between compass and true headings using variation and deviation, with extra drift questions for true track.</p>
-            <span class="quiz-action">Start quiz &rarr;</span>
-          </a>
-        </li>
-      </ul>
+      <section class="quiz-group" aria-labelledby="navigation-topic">
+        <h2 id="navigation-topic">Navigation</h2>
+        <ul class="quiz-list">
+          <li>
+            <a class="panel quiz-card" href="wind-triangle-quiz.html">
+              <h3>Wind Triangle</h3>
+              <p class="muted">Find the heading to fly and ground speed from wind, required track, and true airspeed.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+          <li>
+            <a class="panel quiz-card" href="speed-time-distance-quiz.html">
+              <h3>Speed, Time &amp; Distance</h3>
+              <p class="muted">Given airspeed and either time or distance, find the missing value for a single flight leg.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+          <li>
+            <a class="panel quiz-card" href="heading-track-quiz.html">
+              <h3>Heading &amp; Track (TVMDC)</h3>
+              <p class="muted">Convert between compass and true headings using variation and deviation, with extra drift questions for true track.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+        </ul>
+      </section>
+      <section class="quiz-group" aria-labelledby="altitude-topic">
+        <h2 id="altitude-topic">Altitude &amp; Airspeed</h2>
+        <ul class="quiz-list">
+          <li>
+            <a class="panel quiz-card" href="simple-vertical-navigation-quiz.html">
+              <h3>Simple Vertical Navigation</h3>
+              <p class="muted">Allow for headwind or tailwind, then find altitude gained or lost, or final altitude, during a climb or descent.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+          <li>
+            <a class="panel quiz-card" href="rate-of-descent-quiz.html">
+              <h3>Rate of Descent (RoD)</h3>
+              <p class="muted">Find the descent rate needed to reach a target altitude before arriving at an airfield.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+          <li>
+            <a class="panel quiz-card" href="true-airspeed-quiz.html">
+              <h3>True Airspeed (TAS)</h3>
+              <p class="muted">Calculate pressure altitude from indicated altitude and QNH, then find TAS using OAT and calibrated airspeed.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+          <li>
+            <a class="panel quiz-card" href="true-altitude-quiz.html">
+              <h3>True Altitude</h3>
+              <p class="muted">Find true altitude from QNH-set indicated altitude and calibrated outside air temperature.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+        </ul>
+      </section>
+      <section class="quiz-group" aria-labelledby="fuel-topic">
+        <h2 id="fuel-topic">Fuel &amp; Loading</h2>
+        <ul class="quiz-list">
+          <li>
+            <a class="panel quiz-card" href="fuel-mass-quiz.html">
+              <h3>Fuel Mass</h3>
+              <p class="muted">Calculate AVGAS mass in kg or lbs from litres, US gallons, or imperial gallons and specific gravity.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+          <li>
+            <a class="panel quiz-card" href="fuel-consumption-quiz.html">
+              <h3>Fuel Consumption</h3>
+              <p class="muted">Use two fuel readings to find fuel remaining after a further flight period, or endurance remaining.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+          <li>
+            <a class="panel quiz-card" href="payload-quiz.html">
+              <h3>Payload</h3>
+              <p class="muted">Calculate remaining payload capacity after accounting for empty mass, fuel, and crew.</p>
+              <span class="quiz-action">Start quiz &rarr;</span>
+            </a>
+          </li>
+        </ul>
+      </section>
     </nav>
     <p class="muted">More quizzes will appear here as they are added.</p>
     <footer>Simplified practice only; not for operational navigation.</footer>

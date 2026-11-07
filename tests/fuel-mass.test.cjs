@@ -13,6 +13,7 @@ math.random = () => {
   return seed / 2 ** 32;
 };
 const context = vm.createContext({ Math: math });
+vm.runInContext(readFileSync(path.join(__dirname, "..", "assets", "fuel.js"), "utf8"), context);
 vm.runInContext(script.slice(0, script.indexOf("    const byId")), context);
 const { solveFuelMass, gradeMass, generateQuestion } = context;
 const reference = { quantity: 120, volumeUnit: "litres", specificGravity: 0.72, massUnit: "kg" };

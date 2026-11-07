@@ -11,10 +11,10 @@ Read `index.html`, `assets/theme.css`, and the closest existing quiz before edit
 2. Link `assets/theme.css` and reuse the existing typography, panels, forms, buttons, feedback, and responsive layout. Keep problem-specific styles in the quiz page; extract genuinely shared assets rather than duplicating them.
 3. Include a descriptive title and heading, an `All quizzes` link to `index.html`, labelled inputs with units, explicit bearing/direction conventions where relevant, and accessible answer feedback. Preserve the practice-only disclaimer.
 4. Generate solvable questions, validate inputs, explain the calculation after checking the answer, and provide a deterministic reference example. State tolerances suitable for mechanical-computer or pencil-and-paper readings. New quizzes are tests: do not show calculation hints, formulas, or worked answers before submission; include explicitly requested constants in the question.
-5. Add one linked card to the `quiz-list` in `index.html`, with the same name and a short description of the problem. Link only implemented quizzes; do not add broken links or pretend unwritten quizzes are playable.
+5. Add one linked card to the appropriate topic's `quiz-list` in `index.html`, with the same name and a short description of the problem. Topic sections use h2 headings, cards h3. Link only implemented quizzes; do not add broken links or pretend unwritten quizzes are playable.
 6. Verify local-file menu navigation in both directions, shared styling at narrow and wide widths, the reference answer, an incorrect answer, invalid input, and question reset. Exercise mathematical edge cases introduced by the new quiz.
 
-Keep the menu a short static list; no framework or quiz registry is needed. Extend this skill when a new quiz establishes a reusable convention.
+Keep the menu as short static lists grouped by topic; no framework or quiz registry is needed. Extend this skill when a new quiz establishes a reusable convention.
 
 Use the shared `.parameters` definition-list styling for known values. State wind assumptions explicitly when using airspeed for a distance/time calculation. Convert hours and minutes to total minutes before solving or grading; hours must be whole, minutes less than 60, and total time positive. Disable hidden answer fields so they do not interfere with form validation.
 
@@ -27,6 +27,10 @@ For airspeed correction, use `true-airspeed-quiz.html` as prior art. Convert QNH
 For true altitude, use `true-altitude-quiz.html` as prior art. State the simplified CRP-1 model and sea-level reference assumption. Use the requested 30 ft/hPa pressure conversion, then the ratio of calibrated OAT to ISA temperature at pressure altitude in kelvin; apply that ratio to indicated altitude, not pressure altitude.
 
 For fuel mass, use `fuel-mass-quiz.html` as prior art. Always distinguish US gallons from imperial gallons. Convert volume to litres before applying the stated specific gravity, then convert mass from kg to lbs if requested. Keep full precision when solving and use unit-specific grading tolerances.
+
+For fuel consumption, use `fuel-consumption-quiz.html` as prior art and share conversions through `assets/fuel.js`. Estimate burn from the difference between readings over elapsed time. A further flight period starts at the second reading; endurance is additional time from that reading to zero usable fuel, without reserves unless explicitly specified. Reject flights beyond exhaustion; allow exactly zero fuel. Specific gravity changes mass, not volume-based endurance.
+
+For payload, use `payload-quiz.html` as prior art. Clearly ask for remaining payload capacity after empty mass, usable fuel, and crew, not just payload carried or crew mass. Reuse `assets/fuel.js` for fuel and kg/lbs conversions. Generate loadings at or below MAUW; do not claim a mass-only exercise assesses centre-of-gravity or compartment limits.
 
 For descent planning, use `rate-of-descent-quiz.html` as prior art. Subtract the target point's distance before the destination from the current distance to find the available descent distance. Use ground speed and altitude loss; answers are positive descent rates. Real airfield names are context for fictional scenarios, not published procedures.
 

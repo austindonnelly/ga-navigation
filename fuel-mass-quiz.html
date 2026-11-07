@@ -48,20 +48,11 @@
     </div>
     <footer>Random exercises: AVGAS quantities equivalent to 10&ndash;300 litres, specific gravity 0.72; volume in litres, US gallons, or imperial gallons; mass in kg or lbs. Simplified practice only; not for operational fuel planning.</footer>
   </main>
+  <script src="assets/fuel.js"></script>
   <script>
     "use strict";
 
     const AVGAS_SPECIFIC_GRAVITY = 0.72;
-    const KG_PER_POUND = 0.45359237;
-    const VOLUME_UNITS = Object.freeze({
-      litres: { label: "litres", litresPerUnit: 1 },
-      usGallons: { label: "US gallons", litresPerUnit: 3.785411784 },
-      imperialGallons: { label: "imperial gallons", litresPerUnit: 4.54609 }
-    });
-    const MASS_UNITS = Object.freeze({
-      kg: { label: "kg", minimumTolerance: 0.5 },
-      lbs: { label: "lbs", minimumTolerance: 1 }
-    });
 
     function solveFuelMass({ quantity, volumeUnit, specificGravity, massUnit }) {
       if (!Object.hasOwn(VOLUME_UNITS, volumeUnit) || !Object.hasOwn(MASS_UNITS, massUnit)) {
@@ -70,9 +61,9 @@
       if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(specificGravity) || specificGravity <= 0) {
         throw new Error("Fuel quantity and specific gravity must be finite and positive.");
       }
-      const litres = quantity * VOLUME_UNITS[volumeUnit].litresPerUnit;
-      const kg = litres * specificGravity;
-      const lbs = kg / KG_PER_POUND;
+      const litres = fuelVolumeToLitres(quantity, volumeUnit);
+      const kg = fuelQuantityFromLitres(litres, "kg", specificGravity);
+      const lbs = fuelQuantityFromLitres(litres, "lbs", specificGravity);
       const mass = massUnit === "kg" ? kg : lbs;
       if (![litres, kg, lbs, mass].every(value => Number.isFinite(value) && value > 0)) {
         throw new Error("Fuel volume and mass must remain finite and positive.");

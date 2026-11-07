@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Payload | Navigation Quiz</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <style>
+    .parameters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav aria-label="Quiz navigation"><a href="index.html">All quizzes</a></nav>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>Payload</h1>
+      <p class="muted">Test your loading calculations with a CRP-1 or pencil and paper.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your aircraft loading</h2>
+        <dl class="parameters">
+          <div><dt>Aircraft empty mass</dt><dd id="empty-value"></dd></div>
+          <div><dt>Maximum all-up weight (MAUW)</dt><dd id="mauw-value"></dd></div>
+          <div><dt>Usable fuel on board</dt><dd id="fuel-value"></dd></div>
+          <div><dt>Specific gravity (SpG)</dt><dd id="spg-value"></dd></div>
+          <div><dt>Pilot mass</dt><dd id="pilot-value"></dd></div>
+          <div><dt>Copilot mass</dt><dd id="copilot-value"></dd></div>
+        </dl>
+        <p>How much payload capacity in kg remains for additional passengers or baggage, after accounting for empty mass, the stated fuel, and both crew members?</p>
+        <p class="muted">Empty mass excludes the stated usable fuel and crew. No other loads are aboard. Assume the stated specific gravity remains constant.</p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">Your answer</h2>
+        <form id="quiz-form">
+          <label for="payload">Remaining payload capacity</label>
+          <div class="input-row">
+            <input id="payload" name="payload" type="number" min="0" step="any" required inputmode="decimal" autocomplete="off" aria-describedby="tolerance">
+            <span class="unit">kg</span>
+          </div>
+          <p id="tolerance" class="muted tolerance">Mechanical-computer leeway: &plusmn;2 kg. Decimal masses are welcome.</p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      </section>
+    </div>
+    <footer>Random exercises use fictional GA aircraft, fuel equivalent to 20&ndash;160 litres, SpG 0.72 or 0.75, and crew masses in kg or lbs. This is a mass-only exercise; centre-of-gravity and compartment limits are not assessed. Not for operational loading decisions.</footer>
+  </main>
+  <script src="assets/fuel.js"></script>
+  <script>
+    "use strict";
+
+    const PAYLOAD_TOLERANCE = 2;
+
+    function solvePayload({ emptyMass, mauw, fuelQuantity, volumeUnit, specificGravity, pilotMass, copilotMass, crewUnit }) {
+      if (!Number.isFinite(emptyMass) || emptyMass <= 0 || !Number.isFinite(mauw) || mauw < emptyMass) {
+        throw new Error("Empty mass must be finite and positive; MAUW must be finite and at least the empty mass.");
+      }
+      const fuelLitres = fuelVolumeToLitres(fuelQuantity, volumeUnit);
+      const fuelKg = fuelQuantityFromLitres(fuelLitres, "kg", specificGravity);
+      const pilotKg = massToKilograms(pilotMass, crewUnit);
+      const copilotKg = massToKilograms(copilotMass, crewUnit);
+      const loadedMass = emptyMass + fuelKg + pilotKg + copilotKg;
+      const capacity = mauw - loadedMass;
+      if (!Number.isFinite(loadedMass) || !Number.isFinite(capacity) || capacity < 0) {
+        throw new Error("This quiz requires a finite loading at or below MAUW.");
+      }
+      return { fuelLitres, fuelKg, pilotKg, copilotKg, loadedMass, capacity };
+    }
+
+    function gradePayload(answer, solution) {
+      if (![answer, solution].every(value => Number.isFinite(value) && value >= 0)) {
+        throw new Error("Answer and solution must be finite, nonnegative payload capacities.");
+      }
+      const error = Math.abs(answer - solution);
+      return { error, passed: error <= PAYLOAD_TOLERANCE + 1e-9 };
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const emptyMass = randomInt(65, 100) * 10;
+      const volumeUnits = Object.keys(VOLUME_UNITS);
+      const volumeUnit = volumeUnits[randomInt(0, volumeUnits.length - 1)];
+      const litresPerUnit = VOLUME_UNITS[volumeUnit].litresPerUnit;
+      const crewUnit = Math.random() < 0.5 ? "kg" : "lbs";
+      return {
+        emptyMass, mauw: emptyMass + randomInt(14, 22) * 25,
+        fuelQuantity: randomInt(Math.ceil(20 / litresPerUnit), Math.floor(160 / litresPerUnit)),
+        volumeUnit, specificGravity: Math.random() < 0.5 ? 0.72 : 0.75,
+        pilotMass: crewUnit === "kg" ? randomInt(60, 100) : randomInt(130, 220),
+        copilotMass: crewUnit === "kg" ? randomInt(60, 100) : randomInt(130, 220),
+        crewUnit
+      };
+    }
+
+    const byId = id => document.getElementById(id);
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    const answer = byId("payload");
+    let question;
+    let solution;
+
+    function clearFeedback() {
+      feedback.hidden = true;
+      feedback.className = "";
+      feedback.replaceChildren();
+    }
+
+    function setQuestion(next) {
+      const nextSolution = solvePayload(next);
+      question = next;
+      solution = nextSolution;
+      form.reset();
+      clearFeedback();
+      byId("empty-value").textContent = `${question.emptyMass} kg`;
+      byId("mauw-value").textContent = `${question.mauw} kg`;
+      byId("fuel-value").textContent = `${question.fuelQuantity} ${VOLUME_UNITS[question.volumeUnit].label}`;
+      byId("spg-value").textContent = String(question.specificGravity);
+      byId("pilot-value").textContent = `${question.pilotMass} ${question.crewUnit}`;
+      byId("copilot-value").textContent = `${question.copilotMass} ${question.crewUnit}`;
+    }
+
+    form.addEventListener("input", clearFeedback);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const result = gradePayload(answer.valueAsNumber, solution.capacity);
+      feedback.hidden = false;
+      feedback.className = result.passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = result.passed ? "Correct within mechanical-computer tolerance." : "Outside tolerance. Compare your calculation below.";
+      feedback.appendChild(title);
+      const texts = [
+        `Remaining payload capacity: ${solution.capacity.toFixed(1)} kg.`,
+        `Fuel volume: ${question.fuelQuantity} ${VOLUME_UNITS[question.volumeUnit].label} = ${solution.fuelLitres.toFixed(3)} litres.`,
+        `Fuel mass: ${solution.fuelLitres.toFixed(3)} \u00d7 ${question.specificGravity} = ${solution.fuelKg.toFixed(3)} kg.`,
+        `Pilot: ${question.pilotMass} ${question.crewUnit} = ${solution.pilotKg.toFixed(3)} kg. Copilot: ${question.copilotMass} ${question.crewUnit} = ${solution.copilotKg.toFixed(3)} kg.`,
+        `Loaded mass: ${question.emptyMass} + ${solution.fuelKg.toFixed(3)} + ${solution.pilotKg.toFixed(3)} + ${solution.copilotKg.toFixed(3)} = ${solution.loadedMass.toFixed(3)} kg.`,
+        `Remaining capacity: ${question.mauw} - ${solution.loadedMass.toFixed(3)} = ${solution.capacity.toFixed(3)} kg.`,
+        `Your error: ${result.error.toFixed(2)} kg.`
+      ];
+      for (const text of texts) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      setQuestion(generateQuestion());
+      answer.focus();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({
+        emptyMass: 797, mauw: 1315, fuelQuantity: 19, volumeUnit: "imperialGallons",
+        specificGravity: 0.72, pilotMass: 180, copilotMass: 190, crewUnit: "lbs"
+      });
+      answer.focus();
+    });
+    setQuestion(generateQuestion());
+  </script>
+</body>
+</html>
