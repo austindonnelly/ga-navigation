@@ -21,3 +21,5 @@ Use the shared `.parameters` definition-list styling for known values. State win
 Focused calculation tests live in `tests` and run with `node --test`. Keep them dependency-free; browser checks must still verify actual local-file behaviour.
 
 For vertical navigation, use `simple-vertical-navigation-quiz.html` as prior art. State any IAS = TAS simplification and use ground distance with wind-adjusted ground speed. Altitude changes are signed (negative for descent); final altitude adds that signed change to the initial altitude. Generate segments that finish at nonnegative altitudes, and grade approximate reference readings against the unrounded solution.
+
+For airspeed correction, use `true-airspeed-quiz.html` as prior art. Convert QNH-set indicated altitude to pressure altitude before using OAT and CAS. Keep pressure-altitude conversion independent of OAT, permit negative pressure altitudes, and state whether compressibility is ignored. If allowing a pressure-altitude rule of thumb, name it explicitly and keep the ISA result as the reference.

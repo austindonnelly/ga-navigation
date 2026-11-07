@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>True Airspeed (TAS) | Navigation Quiz</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <style>
+    .parameters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav aria-label="Quiz navigation"><a href="index.html">All quizzes</a></nav>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>True Airspeed (TAS)</h1>
+      <p class="muted">Test your airspeed calculations with a CRP-1 or pencil and paper.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your flight conditions</h2>
+        <dl class="parameters">
+          <div><dt>Indicated altitude (QNH set)</dt><dd id="altitude-value"></dd></div>
+          <div><dt>QNH</dt><dd id="qnh-value"></dd></div>
+          <div><dt>Outside air temperature (OAT)</dt><dd id="oat-value"></dd></div>
+          <div><dt>Calibrated airspeed (CAS)</dt><dd id="cas-value"></dd></div>
+        </dl>
+        <p>What are the pressure altitude and true airspeed in these conditions? Use 30 ft/hPa for the pressure-altitude conversion.</p>
+        <p class="muted">Assume the altimeter is correctly set to the given QNH and has no instrument or position error. Assume dry air and ignore compressibility; no EAS correction is required.</p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">Your answers</h2>
+        <form id="quiz-form">
+          <label for="pressure-altitude">1. Pressure altitude</label>
+          <div class="input-row">
+            <input id="pressure-altitude" name="pressureAltitude" type="number" step="any" required inputmode="decimal" autocomplete="off" aria-describedby="pressure-note">
+            <span class="unit">ft</span>
+          </div>
+          <p id="pressure-note" class="muted tolerance">Leeway: &plusmn;100 ft.</p>
+          <label for="tas">2. True airspeed (TAS)</label>
+          <div class="input-row">
+            <input id="tas" name="tas" type="number" min="0.1" step="any" required inputmode="decimal" autocomplete="off" aria-describedby="tas-note">
+            <span class="unit">kt</span>
+          </div>
+          <p id="tas-note" class="muted tolerance">Mechanical-computer leeway: &plusmn;3 kt.</p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      </section>
+    </div>
+    <footer>Random exercises: indicated altitude 0&ndash;10,000 ft, QNH 980&ndash;1040 hPa, CAS 50&ndash;150 kt, OAT approximately ISA &plusmn;20&deg;C. Simplified practice only; not for operational navigation.</footer>
+  </main>
+  <script>
+    "use strict";
+
+    const STANDARD_PRESSURE = 1013.25;
+    const STANDARD_TEMPERATURE = 288.15;
+    const LAPSE_RATE = 0.0065;
+    const PRESSURE_EXPONENT = 9.80665 / (287.05287 * LAPSE_RATE);
+    const FEET_TO_METRES = 0.3048;
+    const PA_TOLERANCE = 100;
+    const TAS_TOLERANCE = 3;
+
+    function pressureAltitudeFromIndicated(indicatedAltitude, qnh) {
+      if (!Number.isFinite(indicatedAltitude) || !Number.isFinite(qnh) || qnh <= 0 ||
+          indicatedAltitude * FEET_TO_METRES > 11000) {
+        throw new Error("Indicated altitude must be finite and within the troposphere; QNH must be finite and positive.");
+      }
+      const base = 1 - LAPSE_RATE * indicatedAltitude * FEET_TO_METRES / STANDARD_TEMPERATURE;
+      const pressureRatio = qnh / STANDARD_PRESSURE * Math.pow(base, PRESSURE_EXPONENT);
+      const pressureAltitude = STANDARD_TEMPERATURE / LAPSE_RATE *
+        (1 - Math.pow(pressureRatio, 1 / PRESSURE_EXPONENT)) / FEET_TO_METRES;
+      if (!Number.isFinite(pressureRatio) || pressureRatio <= 0 || !Number.isFinite(pressureAltitude) ||
+          pressureAltitude * FEET_TO_METRES > 11000) {
+        throw new Error("Pressure altitude must lie within the finite ISA troposphere model.");
+      }
+      return { pressureAltitude, pressureRatio };
+    }
+
+    function solveTrueAirspeed({ indicatedAltitude, qnh, oat, cas }) {
+      if (!Number.isFinite(oat) || oat <= -273.15 || !Number.isFinite(cas) || cas <= 0) {
+        throw new Error("OAT must be finite and above absolute zero; CAS must be finite and positive.");
+      }
+      const { pressureAltitude, pressureRatio } = pressureAltitudeFromIndicated(indicatedAltitude, qnh);
+      const temperatureRatio = (oat + 273.15) / STANDARD_TEMPERATURE;
+      const densityRatio = pressureRatio / temperatureRatio;
+      const tas = cas / Math.sqrt(densityRatio);
+      const approximatePressureAltitude = indicatedAltitude + (STANDARD_PRESSURE - qnh) * 30;
+      if (!Number.isFinite(densityRatio) || densityRatio <= 0 || !Number.isFinite(tas) || tas <= 0 ||
+          !Number.isFinite(approximatePressureAltitude)) {
+        throw new Error("Conditions must yield finite, positive density and TAS.");
+      }
+      return { pressureAltitude, approximatePressureAltitude, pressureRatio, densityRatio, tas };
+    }
+
+    function gradeAnswers(pressureAltitude, tas, solution) {
+      if (![pressureAltitude, tas, solution.pressureAltitude, solution.approximatePressureAltitude, solution.tas].every(Number.isFinite) ||
+          tas <= 0 || solution.tas <= 0) {
+        throw new Error("Pressure altitudes must be finite and airspeeds finite and positive.");
+      }
+      const isaError = Math.abs(pressureAltitude - solution.pressureAltitude);
+      const approximateError = Math.abs(pressureAltitude - solution.approximatePressureAltitude);
+      const pressureAltitudeError = Math.min(isaError, approximateError);
+      const tasError = Math.abs(tas - solution.tas);
+      return {
+        pressureAltitudeError, tasError,
+        pressureAltitudeOK: pressureAltitudeError <= PA_TOLERANCE + 1e-9,
+        tasOK: tasError <= TAS_TOLERANCE + 1e-9,
+        pressureMethod: isaError <= approximateError ? "ISA calculation" : "30 ft/hPa approximation"
+      };
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const indicatedAltitude = randomInt(0, 40) * 250;
+      const qnh = Math.random() < 0.2 ? STANDARD_PRESSURE : randomInt(980, 1040);
+      const { pressureAltitude } = pressureAltitudeFromIndicated(indicatedAltitude, qnh);
+      const isaCelsius = STANDARD_TEMPERATURE - LAPSE_RATE * pressureAltitude * FEET_TO_METRES - 273.15;
+      return { indicatedAltitude, qnh, oat: Math.round(isaCelsius + randomInt(-20, 20)), cas: randomInt(50, 150) };
+    }
+
+    const byId = id => document.getElementById(id);
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    let question;
+    let solution;
+
+    function clearFeedback() {
+      feedback.hidden = true;
+      feedback.className = "";
+      feedback.replaceChildren();
+    }
+
+    function setQuestion(next) {
+      const nextSolution = solveTrueAirspeed(next);
+      question = next;
+      solution = nextSolution;
+      form.reset();
+      clearFeedback();
+      byId("altitude-value").textContent = `${question.indicatedAltitude} ft`;
+      byId("qnh-value").textContent = `${question.qnh} hPa`;
+      byId("oat-value").textContent = `${question.oat > 0 ? "+" : ""}${question.oat}\u00b0C`;
+      byId("cas-value").textContent = `${question.cas} kt`;
+    }
+
+    form.addEventListener("input", clearFeedback);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const result = gradeAnswers(byId("pressure-altitude").valueAsNumber, byId("tas").valueAsNumber, solution);
+      const passed = result.pressureAltitudeOK && result.tasOK;
+      feedback.hidden = false;
+      feedback.className = passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = passed
+        ? "Correct within mechanical-computer tolerance."
+        : "Outside tolerance. Compare both steps below.";
+      feedback.appendChild(title);
+      const texts = [
+        `Pressure altitude (ISA): ${solution.pressureAltitude.toFixed(1)} ft.`,
+        `Quick estimate: ${question.indicatedAltitude} + (1013.25 - ${question.qnh}) \u00d7 30 = ${solution.approximatePressureAltitude.toFixed(1)} ft.`,
+        `Pressure-altitude answer ${result.pressureAltitudeOK ? "within" : "outside"} tolerance: ${result.pressureAltitudeError.toFixed(1)} ft from the ${result.pressureMethod}.`,
+        `Pressure ratio: ${solution.pressureRatio.toFixed(5)}. Density ratio at ${question.oat}\u00b0C: ${solution.densityRatio.toFixed(5)}.`,
+        `TAS: ${question.cas} / sqrt(${solution.densityRatio.toFixed(5)}) = ${solution.tas.toFixed(1)} kt.`,
+        `TAS answer ${result.tasOK ? "within" : "outside"} tolerance: ${result.tasError.toFixed(1)} kt error.`
+      ];
+      for (const text of texts) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      setQuestion(generateQuestion());
+      byId("pressure-altitude").focus();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({ indicatedAltitude: 3000, qnh: 1026, oat: 0, cas: 92 });
+      byId("pressure-altitude").focus();
+    });
+    setQuestion(generateQuestion());
+  </script>
+</body>
+</html>
