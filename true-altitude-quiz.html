@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>True Altitude | Navigation Quiz</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <style>
+    .parameters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <nav aria-label="Quiz navigation"><a href="index.html">All quizzes</a></nav>
+      <div class="eyebrow">Flight computer practice</div>
+      <h1>True Altitude</h1>
+      <p class="muted">Test your altitude calculations with a CRP-1 or pencil and paper.</p>
+    </header>
+    <div class="layout">
+      <section class="panel" aria-labelledby="scenario-title">
+        <h2 id="scenario-title">Your flight conditions</h2>
+        <dl class="parameters">
+          <div><dt>Indicated altitude (QNH set)</dt><dd id="altitude-value"></dd></div>
+          <div><dt>QNH</dt><dd id="qnh-value"></dd></div>
+          <div><dt>Calibrated OAT</dt><dd id="oat-value"></dd></div>
+        </dl>
+        <p>Calculate your true altitude given these conditions. Assume 1 hPa = 30 ft.</p>
+        <p class="muted">Use the simplified CRP-1 altitude-correction model with a sea-level reference. Assume the altimeter has no instrument or position error and is set to the given QNH. OAT is already calibrated.</p>
+      </section>
+      <section class="panel" aria-labelledby="answer-title">
+        <h2 id="answer-title">Your answer</h2>
+        <form id="quiz-form">
+          <label for="true-altitude">True altitude</label>
+          <div class="input-row">
+            <input id="true-altitude" name="trueAltitude" type="number" min="0" step="any" required inputmode="decimal" autocomplete="off" aria-describedby="tolerance">
+            <span class="unit">ft</span>
+          </div>
+          <p id="tolerance" class="muted tolerance">Mechanical-computer leeway: &plusmn;50 ft. Decimal feet are welcome.</p>
+          <div class="buttons">
+            <button class="primary" type="submit">Check answer</button>
+            <button id="new-question" type="button">New question</button>
+            <button id="reference-example" type="button">Reference example</button>
+          </div>
+        </form>
+        <div id="feedback" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+      </section>
+    </div>
+    <footer>Random exercises: indicated altitude 500&ndash;10,000 ft, QNH 980&ndash;1040 hPa, OAT approximately ISA &plusmn;20&deg;C. Simplified CRP-1 temperature correction only; not for operational navigation.</footer>
+  </main>
+  <script>
+    "use strict";
+
+    const STANDARD_PRESSURE = 1013.25;
+    const FEET_PER_HPA = 30;
+    const STANDARD_TEMPERATURE_C = 15;
+    const LAPSE_RATE_C_PER_FOOT = 0.0065 * 0.3048;
+    const ALTITUDE_TOLERANCE = 50;
+
+    function pressureAltitudeFromIndicated(indicatedAltitude, qnh) {
+      if (!Number.isFinite(indicatedAltitude) || indicatedAltitude < 0 ||
+          !Number.isFinite(qnh) || qnh <= 0) {
+        throw new Error("Indicated altitude must be finite and nonnegative; QNH must be finite and positive.");
+      }
+      const pressureAltitude = indicatedAltitude + (STANDARD_PRESSURE - qnh) * FEET_PER_HPA;
+      if (!Number.isFinite(pressureAltitude) || pressureAltitude * 0.3048 > 11000 ||
+          indicatedAltitude * 0.3048 > 11000) {
+        throw new Error("Altitudes must lie within the finite troposphere model.");
+      }
+      return pressureAltitude;
+    }
+
+    function solveTrueAltitude({ indicatedAltitude, qnh, oat }) {
+      if (!Number.isFinite(oat) || oat <= -273.15) {
+        throw new Error("Calibrated OAT must be finite and above absolute zero.");
+      }
+      const pressureAltitude = pressureAltitudeFromIndicated(indicatedAltitude, qnh);
+      const isaTemperature = STANDARD_TEMPERATURE_C - LAPSE_RATE_C_PER_FOOT * pressureAltitude;
+      const temperatureRatio = (oat + 273.15) / (isaTemperature + 273.15);
+      const trueAltitude = indicatedAltitude * temperatureRatio;
+      if (!Number.isFinite(temperatureRatio) || temperatureRatio <= 0 ||
+          !Number.isFinite(trueAltitude) || trueAltitude < 0) {
+        throw new Error("Conditions must yield a finite, nonnegative true altitude.");
+      }
+      return { pressureAltitude, isaTemperature, temperatureRatio, trueAltitude };
+    }
+
+    function gradeAltitude(answer, solution) {
+      if (!Number.isFinite(answer) || answer < 0 || !Number.isFinite(solution) || solution < 0) {
+        throw new Error("Answer and solution must be finite, nonnegative altitudes.");
+      }
+      const error = Math.abs(answer - solution);
+      return { error, passed: error <= ALTITUDE_TOLERANCE + 1e-9 };
+    }
+
+    function randomInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestion() {
+      const indicatedAltitude = randomInt(2, 40) * 250;
+      const qnh = Math.random() < 0.2 ? STANDARD_PRESSURE : randomInt(980, 1040);
+      const pressureAltitude = pressureAltitudeFromIndicated(indicatedAltitude, qnh);
+      const isaTemperature = STANDARD_TEMPERATURE_C - LAPSE_RATE_C_PER_FOOT * pressureAltitude;
+      return { indicatedAltitude, qnh, oat: Math.round(isaTemperature + randomInt(-20, 20)) };
+    }
+
+    const byId = id => document.getElementById(id);
+    const form = byId("quiz-form");
+    const feedback = byId("feedback");
+    const answer = byId("true-altitude");
+    let question;
+    let solution;
+
+    function clearFeedback() {
+      feedback.hidden = true;
+      feedback.className = "";
+      feedback.replaceChildren();
+    }
+
+    function setQuestion(next) {
+      const nextSolution = solveTrueAltitude(next);
+      question = next;
+      solution = nextSolution;
+      form.reset();
+      clearFeedback();
+      byId("altitude-value").textContent = `${question.indicatedAltitude} ft`;
+      byId("qnh-value").textContent = `${question.qnh} hPa`;
+      byId("oat-value").textContent = `${question.oat > 0 ? "+" : ""}${question.oat}\u00b0C`;
+    }
+
+    form.addEventListener("input", clearFeedback);
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const result = gradeAltitude(answer.valueAsNumber, solution.trueAltitude);
+      feedback.hidden = false;
+      feedback.className = result.passed ? "success" : "retry";
+      feedback.replaceChildren();
+      const title = document.createElement("strong");
+      title.textContent = result.passed
+        ? "Correct within mechanical-computer tolerance."
+        : "Outside tolerance. Compare your reading below.";
+      feedback.appendChild(title);
+      const texts = [
+        `True altitude: ${solution.trueAltitude.toFixed(1)} ft.`,
+        `Pressure altitude: ${question.indicatedAltitude} + (1013.25 - ${question.qnh}) \u00d7 30 = ${solution.pressureAltitude.toFixed(1)} ft.`,
+        `ISA temperature at that pressure altitude: 15 - 0.0019812 \u00d7 ${solution.pressureAltitude.toFixed(1)} = ${solution.isaTemperature.toFixed(2)}\u00b0C.`,
+        `Temperature ratio in kelvin: (${question.oat} + 273.15) / (${solution.isaTemperature.toFixed(2)} + 273.15) = ${solution.temperatureRatio.toFixed(5)}.`,
+        `True altitude: ${question.indicatedAltitude} \u00d7 ${solution.temperatureRatio.toFixed(5)} = ${solution.trueAltitude.toFixed(1)} ft.`,
+        "On the CRP-1 altitude window, align calibrated OAT with pressure altitude. Read true altitude on the outer scale opposite indicated altitude on the inner scale.",
+        `Your error: ${result.error.toFixed(1)} ft.`
+      ];
+      for (const text of texts) {
+        const paragraph = document.createElement("p");
+        paragraph.className = "answer";
+        paragraph.textContent = text;
+        feedback.appendChild(paragraph);
+      }
+    });
+
+    byId("new-question").addEventListener("click", () => {
+      setQuestion(generateQuestion());
+      answer.focus();
+    });
+    byId("reference-example").addEventListener("click", () => {
+      setQuestion({ indicatedAltitude: 6200, qnh: 1030, oat: 10 });
+      answer.focus();
+    });
+    setQuestion(generateQuestion());
+  </script>
+</body>
+</html>
